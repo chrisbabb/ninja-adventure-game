@@ -271,6 +271,8 @@ export abstract class Enemy extends Phaser.Physics.Arcade.Sprite {
 }
 
 // ─── Lantern Soldier → Flame Ronin ────────────────────────────────────────────
+// Signature attack: LANTERN SLAM – charges up then drops three fire pillars
+// near the player's position (telegraphed, stationary hazards).
 
 export class LanternSoldier extends Enemy {
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -279,159 +281,274 @@ export class LanternSoldier extends Enemy {
 
   protected doAttack(playerX: number, playerY: number): void {
     this.state = EnemyState.ATTACK;
-    this.stateTimer = 1000;
-    this.attackCooldown = 2200;
+    this.stateTimer = 1400;
+    this.attackCooldown = 2600;
 
-    // Throw fireball
-    const dir = playerX > this.x ? 1 : -1;
-    const fb = new Projectile(
-      this.scene,
-      this.x + dir * 16, this.y - 20,
-      'enemy_fireball', dir * 320, -60,
-      1, 'enemy', 2000,
-    );
-    if (this.projectiles) this.projectiles.add(fb);
-
-    // Attack flash
+    // Telegraph: lantern glows bright then dims
+    this.setTint(0xffffaa);
     this.scene.tweens.add({
-      targets: this,
-      scaleX: 1.2, scaleY: 0.85,
-      yoyo: true,
-      duration: 120,
+      targets: this, scaleY: 1.25, scaleX: 0.85, yoyo: true, duration: 250,
+    });
+
+    this.scene.time.delayedCall(320, () => {
+      if (this.state === EnemyState.DEAD) return;
+      this.clearTint();
+      this.scene.cameras.main.shake(140, 0.005);
+
+      // Three fire pillars: left, center, right of player
+      const groundY = playerY;
+      [-70, 0, 70].forEach((ox, i) => {
+        this.scene.time.delayedCall(i * 110, () => {
+          if (this.state === EnemyState.DEAD) return;
+          // Stationary pillar projectile
+          const fb = new Projectile(
+            this.scene, playerX + ox, groundY - 20,
+            'enemy_fireball', 0, 0, 1, 'enemy', 950,
+          );
+          (fb.body as Phaser.Physics.Arcade.Body).setSize(20, 44);
+          fb.setScale(1.6, 3.5);
+          if (this.projectiles) this.projectiles.add(fb);
+
+          // Visual column flash
+          const flash = this.scene.add.rectangle(
+            playerX + ox, groundY - 30, 18, 56, 0xff6600, 0.65,
+          ).setDepth(DEPTH.FX);
+          this.scene.tweens.add({
+            targets: flash, alpha: 0, scaleY: 1.3,
+            duration: 600, onComplete: () => flash.destroy(),
+          });
+        });
+      });
     });
   }
 }
 
 // ─── Beetle Samurai → Stone Guard ────────────────────────────────────────────
+// Signature attack: BEETLE STOMP – leaps toward player then slams down,
+// sending shockwave projectiles left and right on impact.
 
 export class BeetleSamurai extends Enemy {
-  private charging = false;
+  private stompActive = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'enemy_beetle', 10, 55, 80, 'stone_guard', 24, 40);
   }
 
   protected doAttack(playerX: number, playerY: number): void {
-    if (this.charging) return;
+    if (this.stompActive) return;
     this.state = EnemyState.ATTACK;
-    this.stateTimer = 1200;
-    this.attackCooldown = 2800;
-    this.charging = true;
+    this.stateTimer = 1700;
+    this.attackCooldown = 3000;
+    this.stompActive = true;
 
-    // Charge attack
-    const dir = playerX > this.x ? 1 : -1;
-    (this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 380);
-    this.setTint(0xddddff);
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const dir  = playerX > this.x ? 1 : -1;
 
-    this.scene.time.delayedCall(600, () => {
-      this.charging = false;
+    // Telegraph: crouch with green flash
+    this.setTint(0x88ff88);
+    body.setVelocityX(dir * 60);
+
+    this.scene.time.delayedCall(180, () => {
+      if (this.state === EnemyState.DEAD) { this.stompActive = false; return; }
       this.clearTint();
-      (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
+      this.setTint(0xffffff);
+
+      // JUMP toward player
+      body.setVelocityX(dir * 220);
+      body.setVelocityY(-500);
+
+      // SLAM phase after jump apex
+      this.scene.time.delayedCall(460, () => {
+        if (this.state === EnemyState.DEAD) { this.stompActive = false; return; }
+        this.clearTint();
+        this.setTint(0x88ccff);
+        body.setVelocityY(800);
+
+        // Landing impact (timer-based – ~370ms to hit ground)
+        this.scene.time.delayedCall(370, () => {
+          if (this.state === EnemyState.DEAD) { this.stompActive = false; return; }
+          this.stompActive = false;
+          this.clearTint();
+          body.setVelocityX(0);
+
+          this.scene.cameras.main.shake(220, 0.009);
+
+          // Two wide shockwave projectiles racing left and right
+          [-1, 1].forEach(sd => {
+            const sw = new Projectile(
+              this.scene, this.x + sd * 30, this.y - 10,
+              'enemy_fireball', sd * 210, 0, 1, 'enemy', 1500,
+            );
+            (sw.body as Phaser.Physics.Arcade.Body).setSize(28, 18);
+            sw.setScale(2.2, 1.2);
+            if (this.projectiles) this.projectiles.add(sw);
+          });
+
+          // Ground crack visual
+          const crack = this.scene.add.rectangle(this.x, this.y - 4, 64, 10, 0xff8800, 0.6)
+            .setDepth(DEPTH.FX);
+          this.scene.tweens.add({
+            targets: crack, alpha: 0, scaleX: 2,
+            duration: 500, onComplete: () => crack.destroy(),
+          });
+        });
+      });
     });
   }
 }
 
 // ─── Crow Ninja → Sky Tengu ───────────────────────────────────────────────────
+// Signature attack: DIVE BOMB – repositions above the player then
+// plunges straight down at high speed. Body contact deals damage.
 
 export class CrowNinja extends Enemy {
   private floatPhase = 0;
   private baseY: number;
+  private diveBombing = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'enemy_crow', 7, 90, 110, 'sky_tengu', 22, 34);
     this.baseY = y;
-    // Crow ninjas float in the air – no gravity
     (this.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
   }
 
   update(time: number, delta: number, playerX: number, playerY: number): void {
-    // Float bob
-    this.floatPhase += delta * 0.003;
-    this.y = this.baseY + Math.sin(this.floatPhase) * 20;
+    // Only bob when not in dive bomb
+    if (!this.diveBombing) {
+      this.floatPhase += delta * 0.003;
+      this.y = this.baseY + Math.sin(this.floatPhase) * 20;
+    }
     super.update(time, delta, playerX, playerY);
   }
 
   protected doAttack(playerX: number, playerY: number): void {
+    if (this.diveBombing) return;
     this.state = EnemyState.ATTACK;
-    this.stateTimer = 900;
-    this.attackCooldown = 2000;
+    this.stateTimer = 1600;
+    this.attackCooldown = 2800;
+    this.diveBombing = true;
 
-    // Triple shuriken fan
-    const dir = playerX > this.x ? 1 : -1;
-    for (let i = -1; i <= 1; i++) {
-      const angle = i * 0.25;
-      const vx = Math.cos(angle) * dir * 300;
-      const vy = Math.sin(angle) * 200;
-      const s = new Projectile(
-        this.scene,
-        this.x + dir * 16, this.y - 16,
-        'enemy_shuriken', vx, vy,
-        1, 'enemy', 1600,
-      );
-      if (this.projectiles) this.projectiles.add(s);
-    }
+    const body = this.body as Phaser.Physics.Arcade.Body;
+
+    // Reposition directly above player
+    this.x = playerX;
+    this.y = this.baseY - 100;
+    body.reset(this.x, this.y);
+
+    // Warning flash + camera micro-shake
+    this.setTint(0xaaaaff);
+    this.scene.cameras.main.shake(70, 0.003);
+
+    this.scene.time.delayedCall(150, () => {
+      if (this.state === EnemyState.DEAD) { this.diveBombing = false; return; }
+      this.clearTint();
+      body.setVelocityX(0);
+      body.setVelocityY(820); // DIVE
+
+      // End dive: fly back up to base float height
+      this.scene.time.delayedCall(520, () => {
+        this.diveBombing = false;
+        if (this.state === EnemyState.DEAD) return;
+        body.setVelocityY(-220);
+        this.scene.time.delayedCall(280, () => {
+          if (this.state === EnemyState.DEAD) return;
+          body.setVelocityY(0);
+          this.y = this.baseY;
+        });
+      });
+    });
   }
 }
 
 // ─── Miniboss: General Emberclaw ──────────────────────────────────────────────
+// Phase 1: INFERNO STOMP – leaps and slams, spawning 5 fire pillars.
+// Phase 2: HELL COMBO – spread shot + inferno stomp combined.
 
 export class GeneralEmberclaw extends Enemy {
   private phase = 1;
-  private chargeActive = false;
+  private stompActive = false;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'enemy_boss', 30, 60, 60, 'flame_ronin', 40, 58);
-    // Boss has deeper red glow
     this.setTint(0xffaa66);
     this.scene.time.delayedCall(200, () => this.clearTint());
   }
 
   protected doAttack(playerX: number, playerY: number): void {
-    if (this.chargeActive) return;
-    this.attackCooldown = this.phase === 2 ? 1400 : 2000;
+    if (this.stompActive) return;
+    this.attackCooldown = this.phase === 2 ? 1300 : 1900;
     this.state = EnemyState.ATTACK;
-    this.stateTimer = 1000;
+    this.stateTimer = 1400;
+    this.stompActive = true;
 
-    if (this.phase === 2 && this.attackCooldown > 700) {
-      // Phase 2: spread shot
-      const dir = playerX > this.x ? 1 : -1;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const dir  = playerX > this.x ? 1 : -1;
+
+    // Phase 2 fires a spread shot before the stomp
+    if (this.phase === 2) {
+      this.setTint(0xff2200);
       for (let i = -2; i <= 2; i++) {
         const angle = i * 0.22;
         const fb = new Projectile(
-          this.scene,
-          this.x + dir * 24, this.y - 28,
+          this.scene, this.x + dir * 24, this.y - 34,
           'enemy_fireball',
-          Math.cos(angle) * dir * 340,
-          Math.sin(angle) * 120 - 60,
+          Math.cos(angle) * dir * 360,
+          Math.sin(angle) * 130 - 70,
           2, 'enemy', 2200,
         );
         if (this.projectiles) this.projectiles.add(fb);
       }
     } else {
-      // Phase 1: charge + fireball
-      const dir = playerX > this.x ? 1 : -1;
-      this.chargeActive = true;
-      (this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 500);
-      this.setTint(0xff4400);
-      this.scene.time.delayedCall(500, () => {
-        this.chargeActive = false;
-        this.clearTint();
-        (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
-
-        const fb = new Projectile(
-          this.scene,
-          this.x + dir * 28, this.y - 28,
-          'enemy_fireball', dir * 380, -40,
-          2, 'enemy', 2000,
-        );
-        if (this.projectiles) this.projectiles.add(fb);
-      });
+      this.setTint(0xff8800);
     }
+
+    // Both phases: leap + slam
+    body.setVelocityX(dir * 180);
+    body.setVelocityY(-400);
+
+    this.scene.time.delayedCall(480, () => {
+      if (this.state === EnemyState.DEAD) { this.stompActive = false; return; }
+      this.clearTint();
+      body.setVelocityY(700);
+
+      this.scene.time.delayedCall(380, () => {
+        if (this.state === EnemyState.DEAD) { this.stompActive = false; return; }
+        this.stompActive = false;
+        this.clearTint();
+        body.setVelocityX(0);
+        this.spawnFloorInferno(playerX, playerY);
+      });
+    });
+  }
+
+  private spawnFloorInferno(playerX: number, playerY: number): void {
+    this.scene.cameras.main.shake(320, 0.013);
+
+    // 5 fire pillars spreading outward from player position
+    [-120, -60, 0, 60, 120].forEach((ox, i) => {
+      this.scene.time.delayedCall(i * 90, () => {
+        if (this.state === EnemyState.DEAD) return;
+        const fb = new Projectile(
+          this.scene, playerX + ox, playerY - 24,
+          'enemy_fireball', 0, 0, 2, 'enemy', 1100,
+        );
+        (fb.body as Phaser.Physics.Arcade.Body).setSize(22, 48);
+        fb.setScale(2.0, 4.0);
+        if (this.projectiles) this.projectiles.add(fb);
+
+        const flash = this.scene.add.rectangle(
+          playerX + ox, playerY - 36, 22, 68, 0xff4400, 0.75,
+        ).setDepth(DEPTH.FX);
+        this.scene.tweens.add({
+          targets: flash, alpha: 0, scaleY: 1.4,
+          duration: 750, onComplete: () => flash.destroy(),
+        });
+      });
+    });
   }
 
   takeDamage(amount: number, fromX: number): boolean {
     const died = super.takeDamage(amount, fromX);
-    // Enter phase 2 at 50%
     if (!died && this.phase === 1 && this.health <= this.maxHealth / 2) {
       this.phase = 2;
       this.setTint(0xff2200);

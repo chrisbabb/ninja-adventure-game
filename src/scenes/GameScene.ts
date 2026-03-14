@@ -129,6 +129,10 @@ export class GameScene extends Phaser.Scene {
   private paused = false;
   private pauseOverlay!: Phaser.GameObjects.Container;
 
+  // Melee hit tracking (prevents multi-hitting in one swing)
+  private attackedEnemiesThisSwing = new Set<Enemy>();
+  private prevAttacking = false;
+
   // Controls help
   private controlsText!: Phaser.GameObjects.Text;
 
@@ -183,9 +187,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (this.player.state === PlayerState.DEAD) return;
+    if (this.player.playerState === PlayerState.DEAD) return;
+
+    // Steal must execute BEFORE player.update() clears stealTarget
+    this.checkStealInteraction();
 
     this.player.update(time, delta);
+    this.checkPlayerMeleeAttack();
 
     // Update enemies
     for (const e of this.enemies) {
@@ -198,9 +206,6 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.getChildren().forEach(p => {
       if ((p as Projectile).active) (p as Projectile).update(time, delta);
     });
-
-    // Check steal interaction
-    this.checkStealInteraction();
 
     // Flame barrier destruction
     this.checkFlameBarrierDestroy();
@@ -389,14 +394,6 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(e, this.crackedFloors);
     }
 
-    // Player attack box ↔ enemies
-    this.physics.add.overlap(
-      this.player.attackBox,
-      this.enemies as unknown as Phaser.GameObjects.GameObject[],
-      this.onPlayerAttackHitEnemy as Phaser.Types.Physics.Arcade.ArcadePhysicsCallback,
-      undefined, this,
-    );
-
     // Player projectiles ↔ enemies
     this.physics.add.overlap(
       this.projectiles,
@@ -527,17 +524,48 @@ export class GameScene extends Phaser.Scene {
 
   // ── Game logic checks ─────────────────────────────────────────────────────
 
-  private checkStealInteraction(): void {
-    const nearest = this.outfitSystem.getNearestStaggeredEnemy(
-      this.enemies, this.player.x, this.player.y, 80,
-    );
+  /** Manual per-frame rectangle overlap check for the player's melee attack box.
+   *  Replaces physics.add.overlap which requires a physics body on attackBox. */
+  private checkPlayerMeleeAttack(): void {
+    const attacking = this.player.playerState === PlayerState.ATTACKING
+      || this.player.playerState === PlayerState.SPECIAL
+      || this.player.playerState === PlayerState.SLIDING;
 
-    // If player just initiated steal, execute it
-    if (this.player.playerState === PlayerState.STEALING && this.player.stealTarget) {
+    if (!this.prevAttacking && attacking) this.attackedEnemiesThisSwing.clear();
+    this.prevAttacking = attacking;
+    if (!attacking) return;
+
+    const box = this.player.attackBox;
+    const bL = box.x - box.width  * 0.5;
+    const bR = box.x + box.width  * 0.5;
+    const bT = box.y - box.height * 0.5;
+    const bB = box.y + box.height * 0.5;
+
+    for (const e of this.enemies) {
+      if (!e.active || e.state === EnemyState.DEAD) continue;
+      if (this.attackedEnemiesThisSwing.has(e)) continue;
+
+      // Use physics body bounds for reliable hit detection
+      const b = e.body as Phaser.Physics.Arcade.Body;
+      if (bL < b.x + b.width && bR > b.x && bT < b.y + b.height && bB > b.y) {
+        this.attackedEnemiesThisSwing.add(e);
+        const dmg = this.player.outfit === 'stone_guard' ? 3 : 2;
+        e.takeDamage(dmg, this.player.x);
+        this.registry.set(REG.SCORE, (this.registry.get(REG.SCORE) as number) + 10);
+      }
+    }
+  }
+
+  private checkStealInteraction(): void {
+    // Execute steal when player has a target and is close enough.
+    // This runs BEFORE player.update() so stealTarget is still set.
+    if (this.player.stealTarget) {
       const target = this.player.stealTarget as Enemy;
-      if (target && Math.abs(this.player.x - target.x) < 32) {
+      if (target.active && target.state === EnemyState.STAGGER
+        && Math.abs(this.player.x - target.x) < 48) {
         this.outfitSystem.executeSteal(target);
         this.player.stealTarget = null;
+        this.player.playerState = PlayerState.IDLE;
         this.enemies = this.enemies.filter(e => e !== target);
       }
     }
