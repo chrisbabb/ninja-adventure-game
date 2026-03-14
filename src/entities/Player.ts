@@ -249,7 +249,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         this.slideTimer -= delta;
         if (this.slideTimer <= 0 || (onGround && Math.abs(body.velocity.x) < 10)) {
           this.changeState(PlayerState.IDLE);
-          body.setSize(PLAYER.W, PLAYER.H);
         }
         break;
 
@@ -375,16 +374,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.changeState(PlayerState.FALLING);
     }
 
-    // Crouch / slide
+    // Crouch / slide  (body size never changed — only visual squash to avoid
+    // body.setSize centering off the floor surface and falling through)
     if (onGround && down) {
       if (dashJust && Math.abs(body.velocity.x) > 10) {
         this.doSlide(body);
       } else {
         this.changeState(PlayerState.CROUCHING);
-        body.setSize(PLAYER.W, PLAYER.H * 0.6);
       }
     } else if (!down && this.playerState === PlayerState.CROUCHING) {
-      body.setSize(PLAYER.W, PLAYER.H);
       this.changeState(PlayerState.IDLE);
     }
 
@@ -424,7 +422,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private doSlide(body: Phaser.Physics.Arcade.Body): void {
     const dir = this.facingRight ? 1 : -1;
     body.setVelocityX(dir * PLAYER.SLIDE_SPEED);
-    body.setSize(PLAYER.W, PLAYER.H * 0.55);
     this.slideTimer = PLAYER.SLIDE_DURATION;
     this.changeState(PlayerState.SLIDING);
   }

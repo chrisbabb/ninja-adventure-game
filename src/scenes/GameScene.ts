@@ -334,12 +334,14 @@ export class GameScene extends Phaser.Scene {
   private createEnemies(): void {
     for (const def of ENEMY_SPAWNS) {
       let e: Enemy;
-      const groundY = GAME_HEIGHT - 20;
+      // Ground tile center is at GAME_HEIGHT-20=520; tile is 32px tall so its
+      // top surface (where characters stand) is at 520-16=504.
+      const groundSurface = GAME_HEIGHT - 36;
       switch (def.type) {
-        case 'lantern': e = new LanternSoldier(this, def.x, groundY); break;
-        case 'beetle':  e = new BeetleSamurai(this, def.x, groundY);  break;
-        case 'crow':    e = new CrowNinja(this, def.x, def.y);        break;
-        case 'boss':    e = new GeneralEmberclaw(this, def.x, groundY); break;
+        case 'lantern': e = new LanternSoldier(this, def.x, groundSurface); break;
+        case 'beetle':  e = new BeetleSamurai(this, def.x, groundSurface);  break;
+        case 'crow':    e = new CrowNinja(this, def.x, def.y);              break;
+        case 'boss':    e = new GeneralEmberclaw(this, def.x, groundSurface); break;
       }
       e.projectiles = this.projectiles;
       this.enemies.push(e);
