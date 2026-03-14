@@ -78,7 +78,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private outfitLabel!: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, `player_${OUTFITS.BASE}`);
+    super(scene, x, y, `player_${OUTFITS.BASE}_sheet`);
 
     // Add to scene manually (cast avoids the private-setState conflict with strict types)
     scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
@@ -132,7 +132,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   equipOutfit(outfit: OutfitType): void {
     this.outfit = outfit;
-    this.setTexture(`player_${outfit}`);
+    this.setTexture(`player_${outfit}_sheet`);
     this.scene.registry.set(REG.OUTFIT, outfit);
 
     this.scene.tweens.add({
@@ -463,11 +463,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     switch (this.outfit) {
       case OUTFITS.FLAME_RONIN: {
-        const dir = this.facingRight ? 1 : -1;
-        body.setVelocityX(dir * PLAYER.DASH_SPEED);
-        this.changeState(PlayerState.SPECIAL, PLAYER.DASH_DURATION);
+        // Direction: prefer currently held key, fallback to facingRight
+        const left  = this.keys.left.isDown  || this.keys.keyA.isDown;
+        const right = this.keys.right.isDown || this.keys.keyD.isDown;
+        const dir = right ? 1 : left ? -1 : (this.facingRight ? 1 : -1);
+        this.facingRight = dir > 0;
+        this.setFlipX(!this.facingRight);
+
+        // Quick burst: very high initial velocity, set tween to decelerate
+        body.setVelocityX(dir * 1100);
+        this.changeState(PlayerState.SPECIAL, 180);
         this.setTint(0xff6600);
-        this.spawnParticles(this.x, this.y - 18, 0xff6600, 12);
+        this.spawnParticles(this.x, this.y - 20, 0xff6600, 14);
+        this.spawnParticles(this.x, this.y - 10, 0xffaa00, 8);
+
+        // Decelerate after burst (makes it feel snappy not sustained)
+        this.scene.time.delayedCall(80, () => {
+          if (this.playerState === PlayerState.SPECIAL) {
+            (this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 300);
+          }
+        });
         break;
       }
       case OUTFITS.STONE_GUARD:
@@ -475,6 +490,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           this.changeState(PlayerState.SPECIAL);
           body.setVelocityY(0);
           this.setTint(0x7a7aaa);
+          // Signal to GameScene that ground pound is incoming
+          this.didGroundPound = false; // will be set true on landing
         }
         break;
       case OUTFITS.SKY_TENGU:
@@ -483,6 +500,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           this.changeState(PlayerState.GLIDING);
           body.setGravityY(-GRAVITY * 0.78);
           body.setMaxVelocityY(80);
+          // Wind slash: spawn a wide wind projectile
+          const dir2 = this.facingRight ? 1 : -1;
+          this.scene.time.delayedCall(50, () => {
+            const proj = new Projectile(
+              this.scene, this.x + dir2 * 20, this.y - 20,
+              'wind_gust', dir2 * 480, -30, 2, 'player', 700,
+            );
+            this.projectiles?.add(proj);
+            this.spawnParticles(this.x, this.y - 20, 0x88ddff, 10);
+          });
         }
         break;
     }
@@ -509,47 +536,51 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private updateVisuals(): void {
+    const outfit = this.outfit;
     switch (this.playerState) {
       case PlayerState.IDLE:
-        this.scaleX = Phaser.Math.Linear(this.scaleX, this.flipX ? -1 : 1, 0.15);
-        this.scaleY = Phaser.Math.Linear(this.scaleY, 1.0, 0.15);
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_idle`) {
+          this.play(`player_${outfit}_idle`, true);
+        }
         break;
-      case PlayerState.RUNNING: {
-        const bob   = Math.sin(this.scene.time.now * 0.022) * 0.06;
-        const scale = this.flipX ? -1 : 1;
-        this.scaleX = (0.9 + bob) * scale;
-        this.scaleY = 1.1 - bob;
+      case PlayerState.RUNNING:
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_run`) {
+          this.play(`player_${outfit}_run`, true);
+        }
         break;
-      }
       case PlayerState.JUMPING:
       case PlayerState.DOUBLE_JUMP:
-        this.scaleX = Phaser.Math.Linear(this.scaleX, this.flipX ? -0.85 : 0.85, 0.2);
-        this.scaleY = Phaser.Math.Linear(this.scaleY, 1.2, 0.2);
-        break;
       case PlayerState.FALLING:
-        this.scaleX = Phaser.Math.Linear(this.scaleX, this.flipX ? -1.1 : 1.1, 0.15);
-        this.scaleY = Phaser.Math.Linear(this.scaleY, 0.9, 0.15);
-        break;
-      case PlayerState.CROUCHING:
-        this.scaleX = this.flipX ? -1.2 : 1.2;
-        this.scaleY = 0.75;
-        break;
-      case PlayerState.SLIDING:
-        this.scaleX = this.flipX ? -1.3 : 1.3;
-        this.scaleY = 0.6;
+      case PlayerState.GLIDING:
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_jump`) {
+          this.play(`player_${outfit}_jump`, true);
+        }
         break;
       case PlayerState.ATTACKING:
-        this.scaleX = this.facingRight ? 1.15 : -1.15;
-        this.scaleY = 0.95;
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_attack`) {
+          this.play(`player_${outfit}_attack`, true);
+        }
         break;
-      case PlayerState.GLIDING:
-        this.scaleX = Phaser.Math.Linear(this.scaleX, this.flipX ? -1.35 : 1.35, 0.1);
-        this.scaleY = Phaser.Math.Linear(this.scaleY, 0.85, 0.1);
+      case PlayerState.SPECIAL:
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_special`) {
+          this.play(`player_${outfit}_special`, true);
+        }
         break;
+      case PlayerState.CROUCHING:
+      case PlayerState.SLIDING:
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_jump`) {
+          this.play(`player_${outfit}_jump`, true);
+        }
+        this.scaleY = this.playerState === PlayerState.SLIDING ? 0.7 : 0.8;
+        return; // skip the reset below
       default:
-        this.scaleX = Phaser.Math.Linear(this.scaleX, this.flipX ? -1 : 1, 0.15);
-        this.scaleY = Phaser.Math.Linear(this.scaleY, 1, 0.15);
+        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_idle`) {
+          this.play(`player_${outfit}_idle`, true);
+        }
+        break;
     }
+    this.scaleX = this.flipX ? -1 : 1;
+    this.scaleY = 1.0;
   }
 
   private updateLabel(): void {

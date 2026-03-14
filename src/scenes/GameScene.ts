@@ -210,6 +210,11 @@ export class GameScene extends Phaser.Scene {
     // Flame barrier destruction
     this.checkFlameBarrierDestroy();
 
+    // Stone Guard ground pound area damage
+    if (this.player.didGroundPound) {
+      this.checkGroundPoundEnemyHit();
+    }
+
     // Cracked floor destruction
     this.checkCrackedFloorDestroy();
 
@@ -616,6 +621,18 @@ export class GameScene extends Phaser.Scene {
         floor.destroy();
       }
     });
+  }
+
+  private checkGroundPoundEnemyHit(): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    for (const e of this.enemies) {
+      if (!e.active || e.state === EnemyState.DEAD) continue;
+      if (Math.abs(e.x - px) < 110 && Math.abs(e.y - py) < 60) {
+        e.takeDamage(3, px);
+        this.registry.set(REG.SCORE, (this.registry.get(REG.SCORE) as number) + 15);
+      }
+    }
   }
 
   private checkExitGate(): void {

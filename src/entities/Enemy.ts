@@ -24,6 +24,13 @@ export abstract class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected staggerTimer   = 0;
   protected stateTimer     = 0;
 
+  protected dodgeTimer    = 0;
+  protected dodgeCooldown = 0;
+  protected dodgeDir      = 0;
+  protected preferredDist = 90;
+  private   lastPlayerX   = 0;
+  private   lastPlayerVX  = 0;
+
   // Reference to projectile group (set by GameScene)
   projectiles?: Phaser.Physics.Arcade.Group;
 
@@ -122,7 +129,7 @@ export abstract class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.state = EnemyState.PATROL;
     }
 
-    this.updateMovement(body, playerX, playerY);
+    this.updateMovement(body, playerX, playerY, delta);
     this.updateUI(false);
   }
 
@@ -130,17 +137,66 @@ export abstract class Enemy extends Phaser.Physics.Arcade.Sprite {
     body: Phaser.Physics.Arcade.Body,
     playerX: number,
     playerY: number,
+    delta: number,
   ): void {
+    this.dodgeCooldown = Math.max(0, this.dodgeCooldown - delta);
+    this.dodgeTimer    = Math.max(0, this.dodgeTimer    - delta);
+
+    // Estimate player velocity
+    const estPlayerVX = (playerX - this.lastPlayerX) / (delta / 1000 + 0.001);
+    this.lastPlayerX  = playerX;
+    this.lastPlayerVX = estPlayerVX;
+
     if (this.state === EnemyState.PATROL) {
-      if (this.x <= this.patrolLeft) { this.patrolDir = 1; }
+      if (this.x <= this.patrolLeft)  { this.patrolDir = 1; }
       if (this.x >= this.patrolRight) { this.patrolDir = -1; }
       body.setVelocityX(this.patrolDir * this.moveSpeed);
       this.setFlipX(this.patrolDir < 0);
-    } else if (this.state === EnemyState.CHASE) {
-      const dir = playerX > this.x ? 1 : -1;
-      body.setVelocityX(dir * this.moveSpeed * 1.3);
-      this.setFlipX(dir < 0);
+      return;
     }
+
+    if (this.state !== EnemyState.CHASE) return;
+
+    const dist    = playerX - this.x;
+    const absDist = Math.abs(dist);
+    const dir     = dist > 0 ? 1 : -1;
+
+    // Active dodge: move away laterally
+    if (this.dodgeTimer > 0) {
+      body.setVelocityX(this.dodgeDir * this.moveSpeed * 2.0);
+      this.setFlipX(this.dodgeDir < 0);
+      return;
+    }
+
+    // Player is charging at us — dodge sideways
+    const playerApproaching = Math.sign(estPlayerVX) === Math.sign(dist) && Math.abs(estPlayerVX) > 180;
+    if (playerApproaching && absDist < 120 && this.dodgeCooldown <= 0) {
+      this.dodgeDir      = -dir;
+      this.dodgeTimer    = 200;
+      this.dodgeCooldown = Phaser.Math.Between(800, 1400);
+      body.setVelocityX(this.dodgeDir * this.moveSpeed * 2.0);
+      return;
+    }
+
+    // Too close — back off
+    if (absDist < this.preferredDist * 0.5 && this.dodgeCooldown <= 0) {
+      body.setVelocityX(-dir * this.moveSpeed * 0.9);
+      this.setFlipX(dir > 0); // face player while retreating
+      return;
+    }
+
+    // Comfortable range — strafe (oscillate horizontally)
+    if (absDist >= this.preferredDist * 0.5 && absDist <= this.preferredDist * 1.4) {
+      const strafe   = Math.sin(this.scene.time.now * 0.002 + this.x * 0.01);
+      const strafeVX = strafe * this.moveSpeed * 0.6;
+      body.setVelocityX(strafeVX);
+      this.setFlipX(dir < 0);
+      return;
+    }
+
+    // Too far — close in
+    body.setVelocityX(dir * this.moveSpeed * 1.3);
+    this.setFlipX(dir < 0);
   }
 
   private updateUI(isStaggered: boolean): void {
@@ -184,6 +240,13 @@ export abstract class Enemy extends Phaser.Physics.Arcade.Sprite {
       dir * ENEMY.KNOCKBACK_VX,
       ENEMY.KNOCKBACK_VY,
     );
+
+    // Trigger a dodge response
+    if (this.state !== EnemyState.DEAD && this.state !== EnemyState.STAGGER) {
+      this.dodgeDir      = this.x > fromX ? 1 : -1;
+      this.dodgeTimer    = 280;
+      this.dodgeCooldown = 600;
+    }
 
     // Stagger at 50% HP or if in stagger threshold
     if (this.health <= this.maxHealth / 2 && this.state !== EnemyState.STAGGER) {
