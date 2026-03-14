@@ -1,0 +1,17 @@
+{
+  "name": "shadow-stitch",
+  "version": "1.0.0",
+  "description": "Shadow Stitch – a browser ninja platformer where you steal enemy outfits",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.60.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  }
+}
