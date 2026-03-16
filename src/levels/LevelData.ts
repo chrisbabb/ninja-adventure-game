@@ -751,8 +751,6 @@ function bossRoom(width: number, height: number): LevelSection {
         line += '#';  // ceiling and floor
       } else if (c === 0 || c === width - 1) {
         line += '#';  // walls
-      } else if (r === 2 && c === 2) {
-        line += '@';  // player spawn
       } else if (r === height - 4 && c === width - 3) {
         line += 'X';  // boss spawn (high enough to not clip floor)
       } else {
