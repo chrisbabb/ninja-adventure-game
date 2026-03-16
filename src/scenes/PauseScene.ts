@@ -1,42 +1,32 @@
 import Phaser from 'phaser';
-import { SCENE_KEYS, StageId } from '../types';
+import { SCENE_KEYS } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT } from '../constants';
 
-export class GameOverScene extends Phaser.Scene {
-  private stageId!: StageId;
+export class PauseScene extends Phaser.Scene {
   private selectedIndex: number = 0;
   private menuItems: Phaser.GameObjects.Text[] = [];
 
   constructor() {
-    super(SCENE_KEYS.GAME_OVER);
-  }
-
-  init(data: { victory: boolean; stageId: StageId }): void {
-    this.stageId = data.stageId;
+    super(SCENE_KEYS.PAUSE);
   }
 
   create(): void {
-    this.cameras.main.setBackgroundColor(0x0a0000);
+    // Dim overlay
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6);
 
-    this.add.text(GAME_WIDTH / 2, 60, 'GAME OVER', {
+    this.add.text(GAME_WIDTH / 2, 60, 'PAUSED', {
       fontFamily: 'monospace',
-      fontSize: '24px',
-      color: '#cc4444',
+      fontSize: '20px',
+      color: '#ffdd44',
       stroke: '#000000',
       strokeThickness: 3,
     }).setOrigin(0.5);
 
-    this.add.text(GAME_WIDTH / 2, 100, 'The ninja has fallen...', {
-      fontFamily: 'monospace',
-      fontSize: '10px',
-      color: '#888888',
-    }).setOrigin(0.5);
-
-    const items = ['Retry Stage', 'Stage Select', 'Main Menu'];
-    const startY = 140;
+    const items = ['Resume', 'Restart Stage', 'Quit to Menu'];
+    const startY = 110;
 
     items.forEach((label, i) => {
-      const text = this.add.text(GAME_WIDTH / 2, startY + i * 26, label, {
+      const text = this.add.text(GAME_WIDTH / 2, startY + i * 28, label, {
         fontFamily: 'monospace',
         fontSize: '11px',
         color: '#ffffff',
@@ -58,6 +48,7 @@ export class GameOverScene extends Phaser.Scene {
       });
       this.input.keyboard.on('keydown-ENTER', () => this.selectItem());
       this.input.keyboard.on('keydown-SPACE', () => this.selectItem());
+      this.input.keyboard.on('keydown-ESC', () => this.resume());
     }
   }
 
@@ -69,15 +60,29 @@ export class GameOverScene extends Phaser.Scene {
 
   private selectItem(): void {
     switch (this.selectedIndex) {
-      case 0:
-        this.scene.start(SCENE_KEYS.GAME, { stageId: this.stageId });
-        break;
-      case 1:
-        this.scene.start(SCENE_KEYS.STAGE_SELECT);
-        break;
-      case 2:
-        this.scene.start(SCENE_KEYS.MAIN_MENU);
-        break;
+      case 0: this.resume(); break;
+      case 1: this.restart(); break;
+      case 2: this.quitToMenu(); break;
     }
+  }
+
+  private resume(): void {
+    this.scene.stop();
+    this.scene.resume(SCENE_KEYS.GAME);
+  }
+
+  private restart(): void {
+    const stageId = this.registry.get('currentStage');
+    this.scene.stop(SCENE_KEYS.UI);
+    this.scene.stop();
+    this.scene.stop(SCENE_KEYS.GAME);
+    this.scene.start(SCENE_KEYS.GAME, { stageId });
+  }
+
+  private quitToMenu(): void {
+    this.scene.stop(SCENE_KEYS.UI);
+    this.scene.stop();
+    this.scene.stop(SCENE_KEYS.GAME);
+    this.scene.start(SCENE_KEYS.MAIN_MENU);
   }
 }

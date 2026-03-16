@@ -6,9 +6,13 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "outDir": "dist",
     "rootDir": "src",
-    "resolveJsonModule": true
+    "sourceMap": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts"]
 }

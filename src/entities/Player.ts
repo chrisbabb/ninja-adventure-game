@@ -1,652 +1,541 @@
 import Phaser from 'phaser';
+import { FormType, SpecialAbility, ProjectileOwner } from '../types';
 import {
-  DEPTH, GRAVITY, OUTFIT_NAMES, OUTFITS, OutfitType,
-  PLAYER, REG,
+  FORM_STATS, DEPTH, GRAVITY, MAX_FALL_SPEED,
+  COYOTE_TIME, JUMP_BUFFER_TIME, INVINCIBILITY_TIME, KNOCKBACK_FORCE,
+  WOLF_FAST_RUN_SPEED, WOLF_FAST_RUN_JUMP_BOOST, DOUBLE_TAP_WINDOW,
+  GAME_WIDTH,
 } from '../constants';
-import { Projectile } from './Projectile';
+import { FormSystem } from '../systems/FormSystem';
+import { DifficultySystem } from '../systems/DifficultySystem';
+import { Projectile, createShuriken, createArrow, createFlame } from './Projectile';
 
 export enum PlayerState {
-  IDLE         = 'idle',
-  RUNNING      = 'running',
-  JUMPING      = 'jumping',
-  DOUBLE_JUMP  = 'double_jump',
-  FALLING      = 'falling',
-  WALL_SLIDING = 'wall_sliding',
-  CROUCHING    = 'crouching',
-  SLIDING      = 'sliding',
-  ATTACKING    = 'attacking',
-  SPECIAL      = 'special',
-  STEALING     = 'stealing',
-  GLIDING      = 'gliding',
-  HURT         = 'hurt',
-  DEAD         = 'dead',
-}
-
-interface Keys {
-  left:   Phaser.Input.Keyboard.Key;
-  right:  Phaser.Input.Keyboard.Key;
-  down:   Phaser.Input.Keyboard.Key;
-  jump:   Phaser.Input.Keyboard.Key;
-  attack: Phaser.Input.Keyboard.Key;
-  steal:  Phaser.Input.Keyboard.Key;
-  dash:   Phaser.Input.Keyboard.Key;
-  // WASD
-  keyA: Phaser.Input.Keyboard.Key;
-  keyD: Phaser.Input.Keyboard.Key;
-  keyW: Phaser.Input.Keyboard.Key;
-  keyS: Phaser.Input.Keyboard.Key;
+  IDLE = 'idle',
+  RUN = 'run',
+  JUMP = 'jump',
+  FALL = 'fall',
+  ATTACK = 'attack',
+  HURT = 'hurt',
+  DEAD = 'dead',
+  DASH = 'dash',
+  WALL_SLIDE = 'wall_slide',
 }
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  // Use playerState to avoid conflict with Phaser's Sprite.state
-  playerState: PlayerState = PlayerState.IDLE;
-  outfit: OutfitType = OUTFITS.BASE;
-  health: number     = PLAYER.MAX_HEALTH;
-  maxHealth: number  = PLAYER.MAX_HEALTH;
-  didGroundPound     = false;
+  formSystem: FormSystem;
+  difficultySystem: DifficultySystem;
 
-  // state timers
-  private stateTimer      = 0;
-  private attackTimer     = 0;
-  private attackCooldown  = 0;
-  private specialCooldown = 0;
-  private invincibleTimer = 0;
-  private slideTimer      = 0;
+  health: number;
+  maxHealth: number;
+  state: PlayerState = PlayerState.IDLE;
+  facingRight: boolean = true;
 
-  // steal
-  stealTarget:  Phaser.GameObjects.Sprite | null = null;
-  private stealTargetX = 0;
+  // Jump tracking
+  private jumpsRemaining: number = 2;
+  private isGrounded: boolean = false;
+  private coyoteTimer: number = 0;
+  private jumpBufferTimer: number = 0;
+  private wasGrounded: boolean = false;
 
-  // movement tracking
-  private jumpCount   = 0;
-  private wasOnGround = false;
-  private isWallLeft  = false;
-  private isWallRight = false;
-  private facingRight = true;
-  private glideActive = false;
+  // Attack tracking
+  private attackTimer: number = 0;
+  private attackCooldown: number = 0;
+  private canAttack: boolean = true;
 
-  // input
-  private keys!: Keys;
+  // Invincibility
+  private invincible: boolean = false;
+  private invincibilityTimer: number = 0;
 
-  // attack hitbox (rectangle, no physics body)
-  attackBox: Phaser.GameObjects.Rectangle;
+  // Wolf form fast run
+  private fastRunning: boolean = false;
+  private lastLeftTap: number = 0;
+  private lastRightTap: number = 0;
+  private prevLeft: boolean = false;
+  private prevRight: boolean = false;
 
-  // projectile group – reference set by GameScene
-  projectiles!: Phaser.Physics.Arcade.Group;
+  // Dash (Armored form)
+  private isDashing: boolean = false;
+  private dashTimer: number = 0;
+  private dashCooldown: number = 0;
+  private dashDuration: number = 250;
 
-  // outfit label displayed above player
-  private outfitLabel!: Phaser.GameObjects.Text;
+  // Projectiles
+  projectiles: Phaser.Physics.Arcade.Group;
 
-  constructor(scene: Phaser.Scene, x: number, y: number) {
-    super(scene, x, y, `player_${OUTFITS.BASE}_sheet`);
+  // Input
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private attackKey!: Phaser.Input.Keyboard.Key;
+  private jumpKey!: Phaser.Input.Keyboard.Key;
+  private specialKey!: Phaser.Input.Keyboard.Key;
+  private dashKey!: Phaser.Input.Keyboard.Key;
 
-    // Add to scene manually (cast avoids the private-setState conflict with strict types)
-    scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
-    scene.physics.add.existing(this as unknown as Phaser.GameObjects.GameObject);
+  // Callbacks
+  onDeath: (() => void) | null = null;
+  onHealthChange: ((health: number, maxHealth: number) => void) | null = null;
+
+  // Wall slide
+  private wallSlideDir: number = 0;
+
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    formSystem: FormSystem,
+    difficultySystem: DifficultySystem,
+  ) {
+    super(scene, x, y, 'player');
+    scene.add.existing(this);
+    scene.physics.add.existing(this);
+
+    this.formSystem = formSystem;
+    this.difficultySystem = difficultySystem;
+
+    const stats = formSystem.getCurrentStats();
+    this.maxHealth = stats.maxHealth;
+    this.health = this.maxHealth;
 
     this.setDepth(DEPTH.PLAYER);
-    this.setOrigin(0.5, 1);
+    this.setDisplaySize(28, 32);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(PLAYER.W, PLAYER.H);
-    body.setMaxVelocityX(PLAYER.SPEED * 1.5);
+    body.setSize(20, 30);
+    body.setOffset(6, 2);
+    body.setMaxVelocityY(MAX_FALL_SPEED);
+    body.setCollideWorldBounds(false);
 
-    this.attackBox = scene.add.rectangle(x, y, 52, 30, 0xffffff, 0.0);
-    this.attackBox.setDepth(DEPTH.PROJECTILE);
-
-    this.setupKeys(scene);
-
-    this.outfitLabel = scene.add.text(x, y - 50, '', {
-      fontSize: '11px',
-      color: '#ffee44',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5, 1).setDepth(DEPTH.UI);
-  }
-
-  private setupKeys(scene: Phaser.Scene): void {
-    const kb = scene.input.keyboard!;
-    this.keys = {
-      left:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-      right:  kb.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-      down:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.DOWN),
-      jump:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.Z),
-      attack: kb.addKey(Phaser.Input.Keyboard.KeyCodes.X),
-      steal:  kb.addKey(Phaser.Input.Keyboard.KeyCodes.C),
-      dash:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      keyA:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      keyD:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      keyW:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      keyS:   kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-    };
-  }
-
-  // ── State helper (private, not overriding Sprite.setState) ────────────────
-
-  private changeState(s: PlayerState, duration = 0): void {
-    this.playerState = s;
-    this.stateTimer  = duration;
-  }
-
-  // ── Public API ─────────────────────────────────────────────────────────────
-
-  equipOutfit(outfit: OutfitType): void {
-    this.outfit = outfit;
-    this.setTexture(`player_${outfit}_sheet`);
-    this.scene.registry.set(REG.OUTFIT, outfit);
-
-    this.scene.tweens.add({
-      targets: this,
-      alpha: { from: 0.2, to: 1 },
-      duration: 400,
-      ease: 'Bounce.Out',
-    });
-
-    const ring = this.scene.add.sprite(this.x, this.y, 'steal_ring').setDepth(DEPTH.FX);
-    this.scene.tweens.add({
-      targets: ring,
-      scaleX: 3, scaleY: 3,
-      alpha: 0,
-      duration: 600,
-      onComplete: () => ring.destroy(),
-    });
-
-    this.outfitLabel.setText(OUTFIT_NAMES[outfit]);
-    this.scene.time.delayedCall(2000, () => {
-      if (this.outfitLabel) this.outfitLabel.setText('');
-    });
-
-    this.scene.events.emit('outfit-changed', outfit);
-  }
-
-  takeDamage(amount: number, fromX?: number): boolean {
-    if (this.invincibleTimer > 0) return false;
-    if (this.playerState === PlayerState.DEAD) return false;
-
-    this.health = Math.max(0, this.health - amount);
-    this.scene.registry.set(REG.HEALTH, this.health);
-    this.invincibleTimer = PLAYER.INVINCIBLE_MS;
-
-    if (fromX !== undefined) {
-      const dir = this.x > fromX ? 1 : -1;
-      (this.body as Phaser.Physics.Arcade.Body).setVelocity(dir * 200, -180);
+    // Input
+    if (scene.input.keyboard) {
+      this.cursors = scene.input.keyboard.createCursorKeys();
+      this.attackKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+      this.jumpKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.specialKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+      this.dashKey = scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
     }
 
-    this.scene.tweens.add({
-      targets: this,
-      alpha: 0.3,
-      yoyo: true,
-      repeat: 5,
-      duration: 120,
-      onComplete: () => { this.alpha = 1; },
+    // Projectile group
+    this.projectiles = scene.physics.add.group({
+      classType: Projectile,
+      runChildUpdate: true,
     });
 
-    if (this.health <= 0) {
-      this.die();
-      return true;
-    }
+    this.applyFormStats();
+  }
 
-    this.changeState(PlayerState.HURT, 400);
+  applyFormStats(): void {
+    const stats = this.formSystem.getCurrentStats();
+    this.maxHealth = stats.maxHealth;
+    if (this.health > this.maxHealth) this.health = this.maxHealth;
+    this.jumpsRemaining = stats.maxJumps;
+    this.setTint(stats.color);
+    this.onHealthChange?.(this.health, this.maxHealth);
+  }
+
+  switchForm(form: FormType): boolean {
+    if (!this.formSystem.setForm(form)) return false;
+    this.applyFormStats();
     return true;
   }
 
-  initiateSteal(target: Phaser.GameObjects.Sprite): void {
-    if (this.playerState === PlayerState.STEALING) return;
-    this.stealTarget  = target;
-    this.stealTargetX = target.x;
-    this.changeState(PlayerState.STEALING);
-    const dir = target.x > this.x ? 1 : -1;
-    (this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * PLAYER.DASH_SPEED);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocityY(-80);
-  }
-
-  // ── Per-frame update ───────────────────────────────────────────────────────
-
   update(time: number, delta: number): void {
-    if (this.playerState === PlayerState.DEAD) return;
+    if (!this.active || !this.body) return;
+    if (this.state === PlayerState.DEAD) return;
 
-    const body      = this.body as Phaser.Physics.Arcade.Body;
-    const onGround  = body.blocked.down;
-    this.isWallLeft  = body.blocked.left  && !onGround;
-    this.isWallRight = body.blocked.right && !onGround;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const stats = this.formSystem.getCurrentStats();
 
-    if (onGround && !this.wasOnGround) {
-      this.jumpCount  = 0;
-      this.glideActive = false;
-      const wasSpecial = this.playerState === PlayerState.SPECIAL;
-      if (this.playerState === PlayerState.FALLING
-        || this.playerState === PlayerState.JUMPING
-        || this.playerState === PlayerState.DOUBLE_JUMP
-        || this.playerState === PlayerState.GLIDING
-        || this.playerState === PlayerState.SPECIAL) {
-        this.changeState(PlayerState.IDLE);
-      }
-      if (wasSpecial && this.outfit === OUTFITS.STONE_GUARD) {
-        this.didGroundPound = true;
-        this.spawnGroundPoundFX();
-      }
+    // Ground check
+    this.wasGrounded = this.isGrounded;
+    this.isGrounded = body.blocked.down || body.touching.down;
+
+    if (this.isGrounded) {
+      this.jumpsRemaining = stats.maxJumps;
+      this.coyoteTimer = COYOTE_TIME;
+      this.fastRunning = this.fastRunning && (this.cursors.left.isDown || this.cursors.right.isDown);
+    } else {
+      this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
     }
-    this.wasOnGround = onGround;
 
-    this.stateTimer      = Math.max(0, this.stateTimer      - delta);
-    this.attackTimer     = Math.max(0, this.attackTimer     - delta);
-    this.attackCooldown  = Math.max(0, this.attackCooldown  - delta);
-    this.specialCooldown = Math.max(0, this.specialCooldown - delta);
-    this.invincibleTimer = Math.max(0, this.invincibleTimer - delta);
-
-    this.handleStateLogic(delta, onGround, body);
-    this.handleInput(onGround, body);
-    this.updateAttackBox();
-    this.updateVisuals();
-    this.updateLabel();
-  }
-
-  // ── State machine ──────────────────────────────────────────────────────────
-
-  private handleStateLogic(delta: number, onGround: boolean, body: Phaser.Physics.Arcade.Body): void {
-    switch (this.playerState) {
-      case PlayerState.SLIDING:
-        this.slideTimer -= delta;
-        if (this.slideTimer <= 0 || (onGround && Math.abs(body.velocity.x) < 10)) {
-          this.changeState(PlayerState.IDLE);
-        }
-        break;
-
-      case PlayerState.STEALING:
-        if (this.stealTarget && Math.abs(this.x - this.stealTargetX) < 30) {
-          this.finishSteal();
-        }
-        break;
-
-      case PlayerState.HURT:
-        if (this.stateTimer <= 0) this.changeState(PlayerState.IDLE);
-        break;
-
-      case PlayerState.ATTACKING:
-        if (this.attackTimer <= 0) {
-          this.attackBox.setFillStyle(0xffffff, 0.0);
-          this.changeState(onGround ? PlayerState.IDLE : PlayerState.FALLING);
-        }
-        break;
-
-      case PlayerState.SPECIAL:
-        if (this.outfit === OUTFITS.STONE_GUARD && !onGround) {
-          if (body.velocity.y < 0) body.setVelocityY(0);
-          body.setVelocityY(Math.min(body.velocity.y + 80, 900));
-        }
-        // Flame dash timeout
-        if (this.outfit === OUTFITS.FLAME_RONIN && this.stateTimer <= 0) {
-          this.clearTint();
-          this.changeState(PlayerState.IDLE);
-        }
-        break;
-
-      case PlayerState.GLIDING:
-        body.setGravityY(-GRAVITY * 0.78);
-        body.setMaxVelocityY(80);
-        if (!this.keys.jump.isDown) {
-          this.glideActive = false;
-          body.setGravityY(0);
-          body.setMaxVelocityY(1000);
-          this.changeState(PlayerState.FALLING);
-        }
-        if (onGround) {
-          body.setGravityY(0);
-          body.setMaxVelocityY(1000);
-          this.changeState(PlayerState.IDLE);
-        }
-        break;
-    }
-  }
-
-  private handleInput(onGround: boolean, body: Phaser.Physics.Arcade.Body): void {
-    if (this.isInputLocked()) return;
-
-    const k      = this.keys;
-    const left   = k.left.isDown  || k.keyA.isDown;
-    const right  = k.right.isDown || k.keyD.isDown;
-    const down   = k.down.isDown  || k.keyS.isDown;
-
-    const jumpJust   = Phaser.Input.Keyboard.JustDown(k.jump)
-                    || Phaser.Input.Keyboard.JustDown(k.keyW);
-    const attackJust = Phaser.Input.Keyboard.JustDown(k.attack);
-    const stealJust  = Phaser.Input.Keyboard.JustDown(k.steal);
-    const dashJust   = Phaser.Input.Keyboard.JustDown(k.dash);
-
-    // Horizontal movement
-    if (this.playerState !== PlayerState.SLIDING && this.playerState !== PlayerState.SPECIAL) {
-      if (left) {
-        body.setVelocityX(-PLAYER.SPEED);
-        this.facingRight = false;
-        if (onGround && this.playerState !== PlayerState.ATTACKING) this.changeState(PlayerState.RUNNING);
-      } else if (right) {
-        body.setVelocityX(PLAYER.SPEED);
-        this.facingRight = true;
-        if (onGround && this.playerState !== PlayerState.ATTACKING) this.changeState(PlayerState.RUNNING);
+    // Invincibility
+    if (this.invincible) {
+      this.invincibilityTimer -= delta;
+      if (this.invincibilityTimer <= 0) {
+        this.invincible = false;
+        this.setAlpha(1);
       } else {
-        body.setVelocityX(body.velocity.x * 0.78);
-        if (onGround && this.playerState === PlayerState.RUNNING) this.changeState(PlayerState.IDLE);
+        // Flicker
+        this.setAlpha(Math.sin(time * 0.02) > 0 ? 1 : 0.3);
       }
     }
 
+    // Dash cooldown
+    if (this.dashCooldown > 0) this.dashCooldown -= delta;
+
+    // Handle states
+    if (this.state === PlayerState.HURT) {
+      this.updateHurt(delta);
+      return;
+    }
+
+    if (this.isDashing) {
+      this.updateDash(delta);
+      return;
+    }
+
+    // ── Movement ──
+
+    // Wolf form double-tap fast run detection
+    if (stats.specialAbility === SpecialAbility.FAST_RUN || stats.specialAbility === SpecialAbility.MASTER_ALL) {
+      this.detectDoubleTap(time);
+    }
+
+    let moveSpeed = stats.speed;
+    if (this.fastRunning) {
+      moveSpeed = WOLF_FAST_RUN_SPEED;
+    }
+
+    let moveX = 0;
+    if (this.cursors.left.isDown) {
+      moveX = -moveSpeed;
+      this.facingRight = false;
+    } else if (this.cursors.right.isDown) {
+      moveX = moveSpeed;
+      this.facingRight = true;
+    }
+
+    body.setVelocityX(moveX);
     this.setFlipX(!this.facingRight);
 
-    // Wall sliding
-    if (!onGround && (this.isWallLeft || this.isWallRight)) {
-      const pushingWall = (this.isWallLeft && left) || (this.isWallRight && right);
-      if (pushingWall) {
-        this.changeState(PlayerState.WALL_SLIDING);
-        body.setVelocityY(Math.min(body.velocity.y, PLAYER.WALL_SLIDE_MAX_VY));
-        this.jumpCount = 1;
+    // ── Wall Slide ──
+    this.wallSlideDir = 0;
+    if (!this.isGrounded && ((body.blocked.left && this.cursors.left.isDown) || (body.blocked.right && this.cursors.right.isDown))) {
+      this.wallSlideDir = body.blocked.left ? -1 : 1;
+      if (body.velocity.y > 50) {
+        body.setVelocityY(50); // Slow fall
+        this.state = PlayerState.WALL_SLIDE;
       }
     }
 
-    // Jump
-    if (jumpJust) {
-      if (onGround) {
-        this.doJump(body);
-      } else if (this.isWallLeft || this.isWallRight) {
-        const dir = this.isWallLeft ? 1 : -1;
-        body.setVelocityX(dir * PLAYER.WALL_JUMP_VX);
-        body.setVelocityY(PLAYER.WALL_JUMP_VY);
-        this.facingRight = dir > 0;
-        this.jumpCount = 1;
-        this.changeState(PlayerState.JUMPING);
-      } else if (this.jumpCount < 2) {
-        this.doDoubleJump(body);
-      } else if (this.outfit === OUTFITS.SKY_TENGU && !this.glideActive) {
-        this.glideActive = true;
-        this.changeState(PlayerState.GLIDING);
-        body.setGravityY(-GRAVITY * 0.78);
-        body.setMaxVelocityY(80);
+    // ── Jump ──
+    this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
+
+    if (Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+      this.jumpBufferTimer = JUMP_BUFFER_TIME;
+    }
+
+    if (this.jumpBufferTimer > 0) {
+      if (this.coyoteTimer > 0 || this.jumpsRemaining > 0) {
+        this.performJump(stats);
+        this.jumpBufferTimer = 0;
       }
     }
 
-    // Auto-transition to falling
-    if (!onGround && body.velocity.y > 30
-      && this.playerState !== PlayerState.JUMPING
-      && this.playerState !== PlayerState.DOUBLE_JUMP
-      && this.playerState !== PlayerState.WALL_SLIDING
-      && this.playerState !== PlayerState.GLIDING
-      && this.playerState !== PlayerState.SPECIAL
-      && this.playerState !== PlayerState.STEALING
-      && this.playerState !== PlayerState.ATTACKING) {
-      this.changeState(PlayerState.FALLING);
+    // Wall jump
+    if (this.wallSlideDir !== 0 &&
+        (Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up))) {
+      body.setVelocityX(-this.wallSlideDir * stats.speed * 1.2);
+      body.setVelocityY(stats.jumpForce * 0.9);
+      this.facingRight = this.wallSlideDir < 0;
+      this.jumpsRemaining = Math.max(0, this.jumpsRemaining - 1);
     }
 
-    // Crouch / slide  (body size never changed — only visual squash to avoid
-    // body.setSize centering off the floor surface and falling through)
-    if (onGround && down) {
-      if (dashJust && Math.abs(body.velocity.x) > 10) {
-        this.doSlide(body);
+    // ── Attack ──
+    this.attackCooldown = Math.max(0, this.attackCooldown - delta);
+
+    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.attackCooldown <= 0) {
+      this.performAttack(stats);
+    }
+
+    // ── Special / Dash ──
+    if (Phaser.Input.Keyboard.JustDown(this.dashKey) && this.dashCooldown <= 0) {
+      if (stats.specialAbility === SpecialAbility.SHURIKEN_DASH || stats.specialAbility === SpecialAbility.MASTER_ALL) {
+        this.performDash();
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.specialKey)) {
+      this.performSpecial(stats);
+    }
+
+    // ── State Update ──
+    if (this.isGrounded) {
+      if (Math.abs(moveX) > 0) {
+        this.state = PlayerState.RUN;
       } else {
-        this.changeState(PlayerState.CROUCHING);
+        this.state = PlayerState.IDLE;
       }
-    } else if (!down && this.playerState === PlayerState.CROUCHING) {
-      this.changeState(PlayerState.IDLE);
-    }
-
-    // Attack
-    if (attackJust && this.attackCooldown <= 0 && this.playerState !== PlayerState.SLIDING) {
-      this.doAttack(onGround);
-    }
-
-    // Special / Steal
-    if (stealJust) {
-      const nearStagger = (this.scene as unknown as Record<string, Function>)
-        ['getNearestStaggeredEnemy']?.(this.x, this.y, PLAYER.STEAL_RANGE);
-      if (nearStagger) {
-        this.initiateSteal(nearStagger as Phaser.GameObjects.Sprite);
-      } else if (this.specialCooldown <= 0) {
-        this.doSpecial(body, onGround);
+    } else {
+      if (this.wallSlideDir !== 0) {
+        this.state = PlayerState.WALL_SLIDE;
+      } else if (body.velocity.y < 0) {
+        this.state = PlayerState.JUMP;
+      } else {
+        this.state = PlayerState.FALL;
       }
     }
-  }
 
-  private doJump(body: Phaser.Physics.Arcade.Body): void {
-    body.setVelocityY(PLAYER.JUMP_VEL);
-    this.jumpCount = 1;
-    this.glideActive = false;
-    this.changeState(PlayerState.JUMPING);
-    this.spawnJumpDust();
-  }
-
-  private doDoubleJump(body: Phaser.Physics.Arcade.Body): void {
-    body.setVelocityY(PLAYER.DOUBLE_JUMP_VEL);
-    this.jumpCount = 2;
-    this.glideActive = false;
-    this.changeState(PlayerState.DOUBLE_JUMP);
-    this.spawnJumpDust(true);
-  }
-
-  private doSlide(body: Phaser.Physics.Arcade.Body): void {
-    const dir = this.facingRight ? 1 : -1;
-    body.setVelocityX(dir * PLAYER.SLIDE_SPEED);
-    this.slideTimer = PLAYER.SLIDE_DURATION;
-    this.changeState(PlayerState.SLIDING);
-  }
-
-  private doAttack(onGround: boolean): void {
-    this.changeState(PlayerState.ATTACKING);
-    this.attackTimer    = PLAYER.ATTACK_DURATION;
-    this.attackCooldown = PLAYER.ATTACK_COOLDOWN;
-    void onGround; // used for future anim distinction
-
-    this.attackBox.setFillStyle(0xffffff, 0.25);
-
-    if (this.outfit === OUTFITS.FLAME_RONIN) {
-      this.scene.time.delayedCall(80, () => {
-        const dir  = this.facingRight ? 1 : -1;
-        const proj = new Projectile(
-          this.scene, this.x + dir * 20, this.y - 18,
-          'fireball', dir * 440, -20, 2, 'player',
-        );
-        this.projectiles?.add(proj);
-        this.spawnParticles(this.x + dir * 20, this.y - 18, 0xff6600, 5);
-      });
-    }
-
-    if (this.outfit === OUTFITS.SKY_TENGU) {
-      this.scene.time.delayedCall(60, () => {
-        const dir  = this.facingRight ? 1 : -1;
-        const proj = new Projectile(
-          this.scene, this.x + dir * 20, this.y - 18,
-          'wind_gust', dir * 360, -10, 1, 'player', 900,
-        );
-        this.projectiles?.add(proj);
-      });
+    // Fall off bottom = death
+    if (this.y > this.scene.physics.world.bounds.height + 100) {
+      this.die();
     }
   }
 
-  private doSpecial(body: Phaser.Physics.Arcade.Body, onGround: boolean): void {
-    this.specialCooldown = PLAYER.SPECIAL_COOLDOWN;
+  private performJump(stats: ReturnType<typeof this.formSystem.getCurrentStats>): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    let jumpForce = stats.jumpForce;
 
-    switch (this.outfit) {
-      case OUTFITS.FLAME_RONIN: {
-        // Direction: prefer currently held key, fallback to facingRight
-        const left  = this.keys.left.isDown  || this.keys.keyA.isDown;
-        const right = this.keys.right.isDown || this.keys.keyD.isDown;
-        const dir = right ? 1 : left ? -1 : (this.facingRight ? 1 : -1);
-        this.facingRight = dir > 0;
-        this.setFlipX(!this.facingRight);
+    // Wolf fast run jump boost
+    if (this.fastRunning) {
+      jumpForce *= WOLF_FAST_RUN_JUMP_BOOST;
+    }
 
-        // Quick burst: very high initial velocity, set tween to decelerate
-        body.setVelocityX(dir * 1100);
-        this.changeState(PlayerState.SPECIAL, 180);
-        this.setTint(0xff6600);
-        this.spawnParticles(this.x, this.y - 20, 0xff6600, 14);
-        this.spawnParticles(this.x, this.y - 10, 0xffaa00, 8);
+    if (this.coyoteTimer > 0 && this.isGrounded) {
+      // First jump (ground)
+      body.setVelocityY(jumpForce);
+      this.coyoteTimer = 0;
+      this.jumpsRemaining = stats.maxJumps - 1;
+    } else if (this.jumpsRemaining > 0) {
+      // Air jumps
+      body.setVelocityY(jumpForce * 0.9);
+      this.jumpsRemaining--;
+    }
 
-        // Decelerate after burst (makes it feel snappy not sustained)
-        this.scene.time.delayedCall(80, () => {
-          if (this.playerState === PlayerState.SPECIAL) {
-            (this.body as Phaser.Physics.Arcade.Body).setVelocityX(dir * 300);
-          }
+    this.state = PlayerState.JUMP;
+  }
+
+  private performAttack(stats: ReturnType<typeof this.formSystem.getCurrentStats>): void {
+    const dirX = this.facingRight ? 1 : -1;
+    const form = this.formSystem.getCurrentForm();
+    const damage = this.difficultySystem.scalePlayerDamage(stats.attackDamage);
+
+    this.attackCooldown = 1000 / stats.attackSpeed;
+    this.state = PlayerState.ATTACK;
+
+    // Tint flash for attack feedback
+    this.setTint(0xffffff);
+    this.scene.time.delayedCall(100, () => {
+      if (this.active) {
+        this.setTint(stats.color);
+      }
+    });
+
+    switch (form) {
+      case FormType.ARCHER:
+        this.spawnProjectile(createArrow(this.scene, this.x + dirX * 16, this.y, dirX, 350, damage));
+        break;
+
+      case FormType.DEMON:
+        this.spawnProjectile(createFlame(this.scene, this.x + dirX * 16, this.y, dirX, 250, damage));
+        break;
+
+      case FormType.ARMORED:
+        // Shuriken throw
+        this.spawnProjectile(createShuriken(this.scene, this.x + dirX * 16, this.y, dirX, 300, damage));
+        break;
+
+      case FormType.MASTER:
+        // Shuriken + melee
+        this.spawnProjectile(createShuriken(this.scene, this.x + dirX * 16, this.y, dirX, 300, damage));
+        this.emitMeleeHitbox(dirX, stats.attackRange, damage);
+        break;
+
+      default:
+        // Melee attack
+        this.emitMeleeHitbox(dirX, stats.attackRange, damage);
+        break;
+    }
+  }
+
+  private emitMeleeHitbox(dirX: number, range: number, damage: number): void {
+    this.scene.events.emit('player-melee-attack', {
+      x: this.x + dirX * (range / 2 + 8),
+      y: this.y,
+      width: range,
+      height: 28,
+      damage,
+      dirX,
+    });
+  }
+
+  private spawnProjectile(proj: Projectile): void {
+    this.projectiles.add(proj);
+  }
+
+  private performSpecial(stats: ReturnType<typeof this.formSystem.getCurrentStats>): void {
+    const form = this.formSystem.getCurrentForm();
+    const dirX = this.facingRight ? 1 : -1;
+    const damage = this.difficultySystem.scalePlayerDamage(stats.attackDamage);
+
+    switch (stats.specialAbility) {
+      case SpecialAbility.FLAME_SWORD:
+        // Extra flame that burns vine barriers
+        const flame = createFlame(this.scene, this.x + dirX * 20, this.y, dirX, 200, damage);
+        flame.setData('burnsVines', true);
+        this.spawnProjectile(flame);
+        break;
+
+      case SpecialAbility.BLOCK_SMASH:
+        // Downward smash (emits event for breakable blocks)
+        this.scene.events.emit('player-block-smash', {
+          x: this.x,
+          y: this.y + 20,
+          width: 40,
+          height: 20,
         });
         break;
-      }
-      case OUTFITS.STONE_GUARD:
-        if (!onGround) {
-          this.changeState(PlayerState.SPECIAL);
-          body.setVelocityY(0);
-          this.setTint(0x7a7aaa);
-          // Signal to GameScene that ground pound is incoming
-          this.didGroundPound = false; // will be set true on landing
-        }
-        break;
-      case OUTFITS.SKY_TENGU:
-        if (!onGround) {
-          this.glideActive = true;
-          this.changeState(PlayerState.GLIDING);
-          body.setGravityY(-GRAVITY * 0.78);
-          body.setMaxVelocityY(80);
-          // Wind slash: spawn a wide wind projectile
-          const dir2 = this.facingRight ? 1 : -1;
-          this.scene.time.delayedCall(50, () => {
-            const proj = new Projectile(
-              this.scene, this.x + dir2 * 20, this.y - 20,
-              'wind_gust', dir2 * 480, -30, 2, 'player', 700,
-            );
-            this.projectiles?.add(proj);
-            this.spawnParticles(this.x, this.y - 20, 0x88ddff, 10);
-          });
-        }
-        break;
-    }
-  }
 
-  private finishSteal(): void {
-    this.changeState(PlayerState.IDLE);
-    this.stealTarget = null;
-    (this.body as Phaser.Physics.Arcade.Body).setVelocityX(0);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocityY(-100);
-  }
+      case SpecialAbility.SHURIKEN_DASH:
+        // Extra shuriken in three directions
+        this.spawnProjectile(createShuriken(this.scene, this.x, this.y, dirX, 300, damage));
+        this.spawnProjectile(createShuriken(this.scene, this.x, this.y, dirX, 280, damage));
+        break;
 
-  private updateAttackBox(): void {
-    const active = this.playerState === PlayerState.ATTACKING
-                || this.playerState === PlayerState.SPECIAL;
-    if (!active) this.attackBox.setFillStyle(0xffffff, 0.0);
+      case SpecialAbility.MASTER_ALL:
+        // Powerful radial shuriken burst
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+          const proj = createShuriken(this.scene, this.x, this.y, 1, 250, damage);
+          proj.setVelocity(Math.cos(angle) * 250, Math.sin(angle) * 250);
+          this.spawnProjectile(proj);
+        }
+        break;
 
-    const dir    = this.facingRight ? 1 : -1;
-    const rangeX = this.outfit === OUTFITS.STONE_GUARD ? 56 : 44;
-    const w      = this.outfit === OUTFITS.STONE_GUARD ? 64 : 48;
-    const h      = this.outfit === OUTFITS.STONE_GUARD ? 36 : 28;
-    this.attackBox.setPosition(this.x + dir * (rangeX / 2 + 4), this.y - PLAYER.H / 2);
-    this.attackBox.setSize(w, h);
-  }
-
-  private updateVisuals(): void {
-    const outfit = this.outfit;
-    switch (this.playerState) {
-      case PlayerState.IDLE:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_idle`) {
-          this.play(`player_${outfit}_idle`, true);
-        }
-        break;
-      case PlayerState.RUNNING:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_run`) {
-          this.play(`player_${outfit}_run`, true);
-        }
-        break;
-      case PlayerState.JUMPING:
-      case PlayerState.DOUBLE_JUMP:
-      case PlayerState.FALLING:
-      case PlayerState.GLIDING:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_jump`) {
-          this.play(`player_${outfit}_jump`, true);
-        }
-        break;
-      case PlayerState.ATTACKING:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_attack`) {
-          this.play(`player_${outfit}_attack`, true);
-        }
-        break;
-      case PlayerState.SPECIAL:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_special`) {
-          this.play(`player_${outfit}_special`, true);
-        }
-        break;
-      case PlayerState.CROUCHING:
-      case PlayerState.SLIDING:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_jump`) {
-          this.play(`player_${outfit}_jump`, true);
-        }
-        this.scaleY = this.playerState === PlayerState.SLIDING ? 0.7 : 0.8;
-        return; // skip the reset below
       default:
-        if (!this.anims.isPlaying || this.anims.currentAnim?.key !== `player_${outfit}_idle`) {
-          this.play(`player_${outfit}_idle`, true);
-        }
         break;
     }
-    this.scaleX = this.flipX ? -1 : 1;
-    this.scaleY = 1.0;
   }
 
-  private updateLabel(): void {
-    this.outfitLabel?.setPosition(this.x, this.y - 52);
+  private performDash(): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const dirX = this.facingRight ? 1 : -1;
+
+    this.isDashing = true;
+    this.dashTimer = this.dashDuration;
+    this.dashCooldown = 600;
+    this.invincible = true;
+    this.invincibilityTimer = this.dashDuration;
+
+    body.setVelocityX(dirX * 350);
+    body.setVelocityY(0);
+    body.setAllowGravity(false);
+
+    // Dash trail effect
+    this.setAlpha(0.6);
   }
 
-  private isInputLocked(): boolean {
-    return this.playerState === PlayerState.DEAD
-        || this.playerState === PlayerState.STEALING;
-  }
-
-  private spawnJumpDust(double_ = false): void {
-    this.spawnParticles(this.x, this.y, double_ ? 0x88ddff : 0xffffff, double_ ? 8 : 5);
-  }
-
-  spawnParticles(x: number, y: number, color: number, count: number): void {
-    for (let i = 0; i < count; i++) {
-      const p = this.scene.add.rectangle(
-        x + Phaser.Math.Between(-12, 12),
-        y + Phaser.Math.Between(-6, 6),
-        Phaser.Math.Between(3, 7),
-        Phaser.Math.Between(3, 7),
-        color,
-      ).setDepth(DEPTH.FX);
-      this.scene.tweens.add({
-        targets: p,
-        x: p.x + Phaser.Math.Between(-30, 30),
-        y: p.y + Phaser.Math.Between(-40, 10),
-        alpha: 0,
-        scaleX: 0,
-        scaleY: 0,
-        duration: Phaser.Math.Between(300, 600),
-        onComplete: () => p.destroy(),
-      });
+  private updateDash(delta: number): void {
+    this.dashTimer -= delta;
+    if (this.dashTimer <= 0) {
+      this.isDashing = false;
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(true);
+      body.setVelocityX(0);
+      this.setAlpha(1);
     }
   }
 
-  private spawnGroundPoundFX(): void {
-    this.clearTint();
-    const ring = this.scene.add.sprite(this.x, this.y, 'pound_crack').setDepth(DEPTH.FX);
-    this.scene.tweens.add({
-      targets: ring,
-      scaleX: 3, alpha: 0,
-      duration: 400,
-      onComplete: () => ring.destroy(),
-    });
-    this.scene.cameras.main.shake(180, 0.006);
-    this.spawnParticles(this.x, this.y, 0x888888, 12);
+  private detectDoubleTap(time: number): void {
+    const leftJustDown = this.cursors.left.isDown && !this.prevLeft;
+    const rightJustDown = this.cursors.right.isDown && !this.prevRight;
+
+    if (leftJustDown) {
+      if (time - this.lastLeftTap < DOUBLE_TAP_WINDOW) {
+        this.fastRunning = true;
+      }
+      this.lastLeftTap = time;
+    }
+
+    if (rightJustDown) {
+      if (time - this.lastRightTap < DOUBLE_TAP_WINDOW) {
+        this.fastRunning = true;
+      }
+      this.lastRightTap = time;
+    }
+
+    // Stop fast running if direction changes or stops
+    if (!this.cursors.left.isDown && !this.cursors.right.isDown) {
+      this.fastRunning = false;
+    }
+
+    this.prevLeft = this.cursors.left.isDown;
+    this.prevRight = this.cursors.right.isDown;
   }
 
-  die(): void {
-    this.changeState(PlayerState.DEAD);
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, -300);
-    this.scene.tweens.add({
-      targets: this,
-      angle: 360,
-      alpha: 0,
-      scaleX: 0,
-      scaleY: 0,
-      y: this.y - 80,
-      duration: 700,
-      onComplete: () => {
-        this.scene.registry.set(REG.WIN, false);
-        this.scene.events.emit('player-died');
-      },
+  private updateHurt(delta: number): void {
+    this.attackTimer += delta;
+    if (this.attackTimer > 300) {
+      this.state = PlayerState.IDLE;
+      this.attackTimer = 0;
+    }
+  }
+
+  takeDamage(amount: number): void {
+    if (this.invincible || this.state === PlayerState.DEAD) return;
+
+    const stats = this.formSystem.getCurrentStats();
+    const finalDamage = Math.max(1, Math.round(amount * (1 - stats.armor)));
+
+    this.health -= finalDamage;
+    this.onHealthChange?.(this.health, this.maxHealth);
+
+    if (this.health <= 0) {
+      this.health = 0;
+      this.die();
+      return;
+    }
+
+    // Hurt state
+    this.state = PlayerState.HURT;
+    this.attackTimer = 0;
+    this.invincible = true;
+    this.invincibilityTimer = INVINCIBILITY_TIME;
+
+    // Knockback
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocityY(-150);
+
+    // Flash red
+    this.setTint(0xff0000);
+    this.scene.time.delayedCall(200, () => {
+      if (this.active) this.setTint(stats.color);
     });
-    this.spawnParticles(this.x, this.y - 18, 0xff4466, 20);
+  }
+
+  heal(amount: number): void {
+    this.health = Math.min(this.maxHealth, this.health + amount);
+    this.onHealthChange?.(this.health, this.maxHealth);
+  }
+
+  private die(): void {
+    this.state = PlayerState.DEAD;
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, -200);
+
+    this.setTint(0xff0000);
+
+    // Death particles
+    const particles = this.scene.add.particles(this.x, this.y, 'particle', {
+      speed: { min: 50, max: 200 },
+      lifespan: 500,
+      quantity: 16,
+      scale: { start: 1, end: 0 },
+      tint: this.formSystem.getCurrentStats().color,
+    });
+    this.scene.time.delayedCall(600, () => particles.destroy());
+
+    this.scene.time.delayedCall(1500, () => {
+      this.onDeath?.();
+    });
+  }
+
+  isAlive(): boolean {
+    return this.state !== PlayerState.DEAD;
+  }
+
+  getFormType(): FormType {
+    return this.formSystem.getCurrentForm();
+  }
+
+  isFastRunning(): boolean {
+    return this.fastRunning;
   }
 }

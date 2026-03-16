@@ -1,137 +1,122 @@
 import Phaser from 'phaser';
-import { DEPTH, GAME_HEIGHT, GAME_WIDTH, OUTFIT_COLORS, OUTFIT_NAMES, OutfitType, REG, SCENES } from '../constants';
+import { SCENE_KEYS, FormType } from '../types';
+import { GAME_WIDTH, GAME_HEIGHT, DEPTH, FORM_NAMES, FORM_STATS } from '../constants';
+import { FormSystem } from '../systems/FormSystem';
+import { Player } from '../entities/Player';
 
 export class UIScene extends Phaser.Scene {
-  private hearts: Phaser.GameObjects.Image[] = [];
-  private outfitBadge!: Phaser.GameObjects.Container;
-  private outfitNameText!: Phaser.GameObjects.Text;
-  private outfitColorBar!: Phaser.GameObjects.Rectangle;
-  private scoreText!: Phaser.GameObjects.Text;
+  private formSystem!: FormSystem;
+  private player!: Player;
 
-  private maxHealth = 6;
-  private currentHealth = 6;
-  private currentOutfit: OutfitType = 'base';
+  // Health bar
+  private healthBarBg!: Phaser.GameObjects.Rectangle;
+  private healthBarFill!: Phaser.GameObjects.Rectangle;
+  private healthText!: Phaser.GameObjects.Text;
 
-  constructor() { super({ key: SCENES.UI }); }
+  // Form indicator
+  private formText!: Phaser.GameObjects.Text;
+  private formIcon!: Phaser.GameObjects.Rectangle;
+
+  // Boss health
+  private bossHealthBarBg!: Phaser.GameObjects.Rectangle;
+  private bossHealthBarFill!: Phaser.GameObjects.Rectangle;
+  private bossNameText!: Phaser.GameObjects.Text;
+  private bossHealthVisible: boolean = false;
+
+  constructor() {
+    super(SCENE_KEYS.UI);
+  }
+
+  init(data: { formSystem: FormSystem; player: Player }): void {
+    this.formSystem = data.formSystem;
+    this.player = data.player;
+  }
 
   create(): void {
-    this.maxHealth     = this.registry.get(REG.MAX_HP)   as number;
-    this.currentHealth = this.registry.get(REG.HEALTH)   as number;
-    this.currentOutfit = this.registry.get(REG.OUTFIT)   as OutfitType;
-
-    this.createHealthDisplay();
-    this.createOutfitBadge();
-    this.createScoreDisplay();
-
-    // Listen for registry changes
-    this.registry.events.on('changedata', this.onRegistryChange, this);
-  }
-
-  private onRegistryChange(parent: unknown, key: string, value: unknown): void {
-    if (key === REG.HEALTH) {
-      this.currentHealth = value as number;
-      this.updateHearts();
-    }
-    if (key === REG.OUTFIT) {
-      this.currentOutfit = value as OutfitType;
-      this.updateOutfitBadge();
-    }
-    if (key === REG.SCORE) {
-      this.scoreText.setText(`SCORE  ${(value as number).toString().padStart(6, '0')}`);
-    }
-  }
-
-  private createHealthDisplay(): void {
-    const startX = 14;
-    const startY = 14;
-    const spacing = 22;
-
-    // Label
-    this.add.text(startX, startY, 'HP', {
-      fontSize: '11px', color: '#aaaaaa',
-      stroke: '#000000', strokeThickness: 2,
-    }).setDepth(DEPTH.UI + 1).setScrollFactor(0);
-
-    // Hearts
-    for (let i = 0; i < this.maxHealth; i++) {
-      const h = this.add.image(startX + 28 + i * spacing, startY + 8, 'heart_full')
-        .setDepth(DEPTH.UI + 1).setScrollFactor(0).setOrigin(0.5);
-      this.hearts.push(h);
-    }
-  }
-
-  private updateHearts(): void {
-    for (let i = 0; i < this.hearts.length; i++) {
-      this.hearts[i].setTexture(i < this.currentHealth ? 'heart_full' : 'heart_empty');
-      // Pulse the hearts that change
-      if (i === this.currentHealth) {
-        this.tweens.add({
-          targets: this.hearts[i],
-          scaleX: 1.4, scaleY: 1.4,
-          yoyo: true,
-          duration: 100,
-        });
-      }
-    }
-  }
-
-  private createOutfitBadge(): void {
-    const badgeX = GAME_WIDTH - 8;
-    const badgeY = 8;
-
-    // Background
-    const bg = this.add.image(badgeX, badgeY, 'outfit_badge_bg')
-      .setOrigin(1, 0).setDepth(DEPTH.UI).setScrollFactor(0);
-
-    // Color bar
-    const { body } = OUTFIT_COLORS[this.currentOutfit];
-    this.outfitColorBar = this.add.rectangle(
-      badgeX - 6, badgeY + 4, 8, 36, body,
-    ).setOrigin(1, 0).setDepth(DEPTH.UI + 1).setScrollFactor(0);
-
-    // "OUTFIT" label
-    this.add.text(badgeX - 18, badgeY + 6, 'OUTFIT', {
-      fontSize: '9px', color: '#888888',
-    }).setOrigin(1, 0).setDepth(DEPTH.UI + 1).setScrollFactor(0);
-
-    // Outfit name
-    this.outfitNameText = this.add.text(
-      badgeX - 18, badgeY + 20,
-      OUTFIT_NAMES[this.currentOutfit], {
-        fontSize: '13px',
-        color: '#ffee44',
-        stroke: '#000000',
-        strokeThickness: 2,
-      },
-    ).setOrigin(1, 0).setDepth(DEPTH.UI + 1).setScrollFactor(0);
-
-    this.outfitBadge = this.add.container(0, 0, [bg, this.outfitColorBar, this.outfitNameText]);
-  }
-
-  private updateOutfitBadge(): void {
-    this.outfitNameText.setText(OUTFIT_NAMES[this.currentOutfit]);
-    const { body } = OUTFIT_COLORS[this.currentOutfit];
-    this.outfitColorBar.setFillStyle(body);
-
-    // Bounce animation
-    this.tweens.add({
-      targets: this.outfitNameText,
-      scaleX: 1.3, scaleY: 1.3,
-      yoyo: true,
-      duration: 150,
-      ease: 'Back.Out',
+    // Player health bar
+    const hx = 10, hy = 10;
+    this.healthBarBg = this.add.rectangle(hx + 50, hy + 5, 100, 10, 0x333333).setOrigin(0, 0.5);
+    this.healthBarFill = this.add.rectangle(hx + 50, hy + 5, 100, 10, 0x44cc44).setOrigin(0, 0.5);
+    this.healthText = this.add.text(hx, hy, 'HP', {
+      fontFamily: 'monospace',
+      fontSize: '9px',
+      color: '#44cc44',
     });
+
+    // Form indicator
+    this.formIcon = this.add.rectangle(hx, hy + 20, 12, 12, FORM_STATS[this.formSystem.getCurrentForm()].color);
+    this.formText = this.add.text(hx + 18, hy + 16, FORM_NAMES[this.formSystem.getCurrentForm()], {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#ffffff',
+    });
+
+    // Boss health bar (hidden initially)
+    const bx = GAME_WIDTH / 2;
+    this.bossNameText = this.add.text(bx, GAME_HEIGHT - 30, '', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#ff6666',
+    }).setOrigin(0.5).setVisible(false);
+
+    this.bossHealthBarBg = this.add.rectangle(bx, GAME_HEIGHT - 18, 200, 12, 0x333333)
+      .setOrigin(0.5).setVisible(false);
+    this.bossHealthBarFill = this.add.rectangle(bx - 100, GAME_HEIGHT - 18, 200, 12, 0xcc4444)
+      .setOrigin(0, 0.5).setVisible(false);
+
+    // Listen for events from GameScene
+    const gameScene = this.scene.get(SCENE_KEYS.GAME);
+
+    gameScene.events.on('boss-fight-start', (bossType: string, health: number, maxHealth: number) => {
+      this.bossHealthVisible = true;
+      const name = bossType.replace(/_/g, ' ').toUpperCase();
+      this.bossNameText.setText(name).setVisible(true);
+      this.bossHealthBarBg.setVisible(true);
+      this.bossHealthBarFill.setVisible(true);
+      this.updateBossHealth(health, maxHealth);
+    });
+
+    gameScene.events.on('boss-health-change', (health: number, maxHealth: number) => {
+      this.updateBossHealth(health, maxHealth);
+    });
+
+    // Player callbacks
+    this.player.onHealthChange = (health: number, maxHealth: number) => {
+      this.updatePlayerHealth(health, maxHealth);
+    };
+
+    // Initial update
+    this.updatePlayerHealth(this.player.health, this.player.maxHealth);
   }
 
-  private createScoreDisplay(): void {
-    this.scoreText = this.add.text(
-      GAME_WIDTH / 2, 10,
-      'SCORE  000000', {
-        fontSize: '14px',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 3,
-      },
-    ).setOrigin(0.5, 0).setDepth(DEPTH.UI + 1).setScrollFactor(0);
+  update(): void {
+    // Update form display if it changed
+    const currentForm = this.formSystem.getCurrentForm();
+    const formName = FORM_NAMES[currentForm];
+    if (this.formText.text !== formName) {
+      this.formText.setText(formName);
+      this.formIcon.setFillStyle(FORM_STATS[currentForm].color);
+    }
+  }
+
+  private updatePlayerHealth(health: number, maxHealth: number): void {
+    const percent = Math.max(0, health / maxHealth);
+    this.healthBarFill.setDisplaySize(100 * percent, 10);
+
+    // Color changes based on health
+    if (percent > 0.5) {
+      this.healthBarFill.setFillStyle(0x44cc44);
+    } else if (percent > 0.25) {
+      this.healthBarFill.setFillStyle(0xcccc44);
+    } else {
+      this.healthBarFill.setFillStyle(0xcc4444);
+    }
+
+    this.healthText.setText(`HP ${Math.ceil(health)}/${maxHealth}`);
+  }
+
+  private updateBossHealth(health: number, maxHealth: number): void {
+    const percent = Math.max(0, health / maxHealth);
+    this.bossHealthBarFill.setDisplaySize(200 * percent, 12);
   }
 }
