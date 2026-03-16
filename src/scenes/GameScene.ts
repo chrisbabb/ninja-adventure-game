@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS, StageId, BossType, FormType, Difficulty, ProjectileOwner } from '../types';
-import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE, GRAVITY, DEPTH, STAGE_CONFIGS, BOSS_CONFIGS } from '../constants';
+import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE, GRAVITY, DEPTH, STAGE_CONFIGS, BOSS_CONFIGS, FORM_NAMES } from '../constants';
 import { Player } from '../entities/Player';
 import { BaseEnemy } from '../entities/enemies/BaseEnemy';
 import { createEnemy } from '../entities/enemies/EnemyFactory';
@@ -27,6 +27,7 @@ export class GameScene extends Phaser.Scene {
 
   private escKey!: Phaser.Input.Keyboard.Key;
   private tabKey!: Phaser.Input.Keyboard.Key;
+  private formToggleKey!: Phaser.Input.Keyboard.Key;
 
   // Melee attack hitbox (temporary zone)
   private meleeZone: Phaser.GameObjects.Zone | null = null;
@@ -84,6 +85,7 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.player.onDeath = () => {
+      this.player.onHealthChange = null;
       this.scene.stop(SCENE_KEYS.UI);
       this.scene.start(SCENE_KEYS.GAME_OVER, { victory: false, stageId: this.stageId });
     };
@@ -226,6 +228,7 @@ export class GameScene extends Phaser.Scene {
     if (this.input.keyboard) {
       this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
       this.tabKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB);
+      this.formToggleKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
     }
 
     // Launch UI overlay
@@ -254,6 +257,11 @@ export class GameScene extends Phaser.Scene {
     if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
       this.scene.pause();
       this.scene.launch(SCENE_KEYS.PAUSE, { gameScene: this });
+    }
+
+    // Fast form toggle (Q key)
+    if (this.formToggleKey && Phaser.Input.Keyboard.JustDown(this.formToggleKey)) {
+      this.cycleForm();
     }
 
     // Form menu
@@ -330,6 +338,22 @@ export class GameScene extends Phaser.Scene {
       }
       return true;
     });
+  }
+
+  private cycleForm(): void {
+    const unlocked = this.formSystem.getUnlockedForms();
+    if (unlocked.length <= 1) return;
+
+    const current = this.formSystem.getCurrentForm();
+    const currentIdx = unlocked.indexOf(current);
+    const nextIdx = (currentIdx + 1) % unlocked.length;
+    const nextForm = unlocked[nextIdx];
+
+    this.player.switchForm(nextForm);
+    this.saveSystem.setCurrentForm(nextForm);
+
+    // Notify UI to show toggle popup
+    this.events.emit('form-toggled', FORM_NAMES[nextForm]);
   }
 
   private checkBossRoomEntry(): void {
@@ -417,6 +441,7 @@ export class GameScene extends Phaser.Scene {
 
       // Victory screen
       this.time.delayedCall(2000, () => {
+        this.player.onHealthChange = null;
         this.scene.stop(SCENE_KEYS.UI);
         this.scene.start(SCENE_KEYS.VICTORY, {
           stageId: this.stageId,
