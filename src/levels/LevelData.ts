@@ -86,14 +86,14 @@ export function generateLevel(stageId: StageId): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateKnightFortress(): LevelSection[] {
-  const DW = EnemyType.DWARF_WARRIOR;
-  const SK = EnemyType.SKELETON_WARRIOR;
-  const SG = EnemyType.STONE_GOLEM;
-  const GB = EnemyType.GOBLIN;
-  const MO = EnemyType.MASKED_ORC;
+  const DW = EnemyType.DWARF_WARRIOR;   // melee patrol
+  const SK = EnemyType.SKELETON_WARRIOR; // melee patrol
+  const GB = EnemyType.GOBLIN;           // melee chase (fast)
+  const SA = EnemyType.SATYR_ARCHER;     // ranged patrol (shoots arrows)
+  const GR = EnemyType.GRYPHON;          // flying dive-bomber
 
   // Section 1: Castle Gate (30x10)
-  // Rampart platforms with guards, spike moats, goblin rushers below
+  // Gryphon patrols sky, archers snipe from ramparts, goblins rush on ground
   const s1 = section([
     '..............................',
     '..............---.............',
@@ -106,12 +106,12 @@ function generateKnightFortress(): LevelSection[] {
     '..##..##..SSS..#####..###.##..',
     '##############################',
   ], [
-    e(DW, 8, 1), e(SK, 22, 3), e(GB, 15, 7), e(GB, 18, 7),
-    e(MO, 26, 2), e(DW, 12, 6), e(SK, 5, 3),
+    e(GR, 14, 0), e(SA, 8, 1), e(SA, 22, 3), e(GB, 15, 7),
+    e(DW, 26, 2), e(SK, 12, 6), e(GB, 5, 3),
   ]);
 
   // Section 2: Courtyard & Ramparts (35x12)
-  // Multi-level ramparts, stone golem guarding gate, archers on high
+  // Archers snipe from high platforms, gryphon dives, melee guards below
   const s2 = section([
     '...................................',
     '......---....................---...',
@@ -126,11 +126,11 @@ function generateKnightFortress(): LevelSection[] {
     '..##..##.##..SSS...##..##..##.##...',
     '###################################',
   ], [
-    e(DW, 6, 1), e(SK, 28, 1), e(MO, 16, 3), e(SG, 22, 4),
-    e(GB, 10, 8), e(GB, 32, 7), e(DW, 19, 5), e(SK, 8, 5),
+    e(SA, 6, 1), e(GR, 20, 0), e(SA, 28, 1), e(DW, 16, 3),
+    e(GB, 10, 8), e(GB, 32, 7), e(SK, 19, 5), e(DW, 8, 5),
   ]);
 
-  // Section 3: Tower Ascent (30x14) - zigzag with guards on each level
+  // Section 3: Tower Ascent (30x14) - zigzag with archers sniping from each level
   const s3 = section([
     '..............................',
     '..---......................---',
@@ -147,12 +147,12 @@ function generateKnightFortress(): LevelSection[] {
     '..##..SSS..##.........###.##..',
     '##############################',
   ], [
-    e(SK, 4, 1), e(MO, 26, 1), e(DW, 14, 3), e(DW, 22, 3),
-    e(GB, 6, 5), e(SG, 10, 4), e(SK, 18, 7),
-    e(MO, 24, 8), e(GB, 12, 10), e(DW, 20, 11),
+    e(GR, 15, 0), e(SA, 4, 1), e(SA, 26, 1), e(DW, 14, 3),
+    e(GB, 6, 5), e(SK, 10, 4), e(SA, 18, 7),
+    e(DW, 24, 8), e(GB, 12, 10), e(SK, 20, 11),
   ]);
 
-  // Section 4: Rampart Run (35x10) - gauntlet with sentries above spikes
+  // Section 4: Rampart Run (35x10) - gauntlet with archers above, gryphon swooping
   const s4 = section([
     '...................................',
     '..---........---........---..---...',
@@ -165,9 +165,9 @@ function generateKnightFortress(): LevelSection[] {
     '..##..##..SSS...##..SSS...##.##.##.',
     '###################################',
   ], [
-    e(DW, 4, 1), e(SK, 15, 1), e(MO, 24, 1), e(SG, 32, 1),
+    e(SA, 4, 1), e(GR, 12, 0), e(SA, 24, 1), e(GR, 30, 0),
     e(GB, 10, 3), e(GB, 20, 3), e(DW, 28, 3),
-    e(SK, 6, 5), e(MO, 18, 5),
+    e(SK, 6, 5), e(SK, 18, 5),
   ]);
 
   // Section 5: Throne Room (boss)
@@ -182,14 +182,14 @@ function generateKnightFortress(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateDemonInferno(): LevelSection[] {
-  const IM = EnemyType.IMP;
-  const PY = EnemyType.PYROMANCER;
-  const SM = EnemyType.SKELETON_MAGE;
-  const FE = EnemyType.FLYING_EYE;
-  const PS = EnemyType.POISON_SKULL;
+  const IM = EnemyType.IMP;              // flying ranged (fire shots)
+  const PY = EnemyType.PYROMANCER;       // stationary ranged (fire blasts)
+  const KW = EnemyType.KOBOLD_WARRIOR;   // melee patrol
+  const FE = EnemyType.FLYING_EYE;       // flying ranged (eye beams)
+  const LZ = EnemyType.LIZARDMAN;        // melee patrol
 
   // Section 1: Volcanic Entrance (32x10)
-  // Pyromancers snipe from platforms above lava pits, imps patrol airspace
+  // Imps fly overhead shooting, pyromancers snipe from platforms, lizards patrol ground
   const s1 = section([
     '................................',
     '..............---...............',
@@ -202,12 +202,12 @@ function generateDemonInferno(): LevelSection[] {
     '..##..VV..##.SSSS..##..##..VV...',
     '################################',
   ], [
-    e(IM, 8, 1), e(PY, 18, 3), e(FE, 14, 1), e(PS, 10, 4),
-    e(SM, 24, 4), e(IM, 28, 2), e(PY, 6, 3),
+    e(IM, 8, 1), e(PY, 18, 3), e(FE, 14, 0), e(LZ, 10, 4),
+    e(KW, 24, 4), e(IM, 28, 2), e(PY, 6, 3),
   ]);
 
   // Section 2: Fire Corridors with vine barriers (30x12)
-  // Vine barriers funnel player, pyromancers on platforms, skulls lurking
+  // Flying eyes patrol above, pyromancers on platforms, melee guards below
   const s2 = section([
     '..............................',
     '..---....................---..',
@@ -222,12 +222,12 @@ function generateDemonInferno(): LevelSection[] {
     '..##..##..VV.SSSS..##..##.##..',
     '##############################',
   ], [
-    e(PY, 10, 4), e(SM, 4, 1), e(IM, 16, 0), e(FE, 24, 1),
-    e(PS, 20, 3), e(IM, 8, 6), e(PS, 14, 7),
-    e(SM, 22, 6), e(PY, 26, 3),
+    e(PY, 10, 4), e(LZ, 4, 1), e(IM, 16, 0), e(FE, 24, 0),
+    e(KW, 20, 3), e(IM, 8, 6), e(LZ, 14, 7),
+    e(KW, 22, 6), e(PY, 26, 3),
   ]);
 
-  // Section 3: Lava Platforms (35x10) - spike pits with snipers above
+  // Section 3: Lava Platforms (35x10) - imps swarm air, pyromancers snipe, melee on ground
   const s3 = section([
     '...................................',
     '..---........---........---........',
@@ -240,12 +240,12 @@ function generateDemonInferno(): LevelSection[] {
     '..##..VV..##.SS.VV..##.SS.VV..##...',
     '###################################',
   ], [
-    e(IM, 5, 1), e(FE, 18, 0), e(IM, 30, 1), e(PY, 12, 1),
-    e(PY, 24, 1), e(PS, 9, 3), e(PS, 21, 3),
-    e(SM, 15, 5), e(SM, 27, 5),
+    e(IM, 5, 0), e(FE, 18, 0), e(IM, 30, 0), e(PY, 12, 1),
+    e(PY, 24, 1), e(LZ, 9, 3), e(KW, 21, 3),
+    e(LZ, 15, 5), e(KW, 27, 5),
   ]);
 
-  // Section 4: Descent into Inferno (30x14) - zigzag with fire traps
+  // Section 4: Descent into Inferno (30x14) - all enemy types in final push
   const s4 = section([
     '..............................',
     '..---....................---..',
@@ -262,9 +262,9 @@ function generateDemonInferno(): LevelSection[] {
     '..##..##.SS.VV.##.SS.##.##....',
     '##############################',
   ], [
-    e(PY, 4, 1), e(IM, 16, 0), e(FE, 24, 1), e(SM, 22, 3),
-    e(PS, 10, 3), e(IM, 8, 6), e(PY, 18, 5),
-    e(SM, 14, 9), e(PS, 6, 9), e(FE, 26, 7),
+    e(PY, 4, 1), e(IM, 16, 0), e(FE, 24, 0), e(KW, 22, 3),
+    e(LZ, 10, 3), e(IM, 8, 6), e(PY, 18, 5),
+    e(LZ, 14, 9), e(KW, 6, 9), e(FE, 26, 7),
   ]);
 
   // Section 5: Demon's Chamber
@@ -279,14 +279,13 @@ function generateDemonInferno(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateHauntedGraveyard(): LevelSection[] {
-  const WW = EnemyType.WEREWOLF;
-  const GA = EnemyType.GARGOYLE;
-  const SK = EnemyType.SKELETON_WARRIOR;
-  const GB = EnemyType.GOBLIN;
-  const HA = EnemyType.HARPY;
+  const WW = EnemyType.WEREWOLF;         // melee chase (fast)
+  const GA = EnemyType.GARGOYLE;         // flying ambush dive
+  const SM = EnemyType.SKELETON_MAGE;    // ranged patrol (magic bolts)
+  const GB = EnemyType.GOBLIN;           // melee chase
+  const HA = EnemyType.HARPY;            // flying dive chase
 
-  // Section 1: Graveyard Entrance (32x10) - tombstone platforms with ambushers
-  // Gargoyles ambush from tombstone tops, werewolves chase on ground
+  // Section 1: Graveyard Entrance (32x10) - harpies swoop, mages snipe, werewolves rush
   const s1 = section([
     '................................',
     '..............---...............',
@@ -299,11 +298,11 @@ function generateHauntedGraveyard(): LevelSection[] {
     '..##..##...##..SSS..##..##..##..',
     '################################',
   ], [
-    e(SK, 8, 3), e(GA, 14, 1), e(SK, 18, 4), e(WW, 24, 4),
-    e(GB, 10, 7), e(GB, 20, 6), e(HA, 28, 2),
+    e(SM, 8, 3), e(GA, 14, 0), e(HA, 22, 0), e(WW, 24, 4),
+    e(GB, 10, 7), e(SM, 20, 6), e(HA, 28, 2),
   ]);
 
-  // Section 2: Crypt Descent (30x14) - gargoyles lurking on platforms
+  // Section 2: Crypt Descent (30x14) - gargoyles lurk, mages snipe from ledges
   const s2 = section([
     '..............................',
     '..---....................---..',
@@ -320,12 +319,12 @@ function generateHauntedGraveyard(): LevelSection[] {
     '..##..##.SS.##.##.SS.##.##....',
     '##############################',
   ], [
-    e(GA, 4, 1), e(HA, 24, 1), e(SK, 14, 3), e(SK, 22, 3),
+    e(GA, 4, 0), e(HA, 24, 0), e(SM, 14, 3), e(SM, 22, 3),
     e(WW, 8, 5), e(GB, 18, 5), e(GA, 10, 7),
-    e(GB, 26, 8), e(WW, 14, 9), e(SK, 20, 11),
+    e(GB, 26, 8), e(WW, 14, 9), e(SM, 20, 11),
   ]);
 
-  // Section 3: Underground Tunnels (35x10) - tight corridors with harpies above
+  // Section 3: Underground Tunnels (35x10) - harpies above, mages on platforms
   const s3 = section([
     '...................................',
     '..---........---........---........',
@@ -338,12 +337,12 @@ function generateHauntedGraveyard(): LevelSection[] {
     '..##..##..##.SS.##..##.SS.##..##...',
     '###################################',
   ], [
-    e(SK, 4, 1), e(HA, 15, 0), e(SK, 24, 1), e(WW, 10, 3),
-    e(GA, 20, 3), e(GB, 6, 5), e(GB, 28, 5),
-    e(WW, 16, 5), e(SK, 32, 3),
+    e(SM, 4, 1), e(HA, 15, 0), e(SM, 24, 1), e(WW, 10, 3),
+    e(GA, 20, 0), e(GB, 6, 5), e(GB, 28, 5),
+    e(WW, 16, 5), e(HA, 32, 0),
   ]);
 
-  // Section 4: Cemetery Chase (35x10) - swarm with gargoyle ambushes
+  // Section 4: Cemetery Chase (35x10) - swarm with flying and ranged
   const s4 = section([
     '...................................',
     '..---........---........---..---...',
@@ -356,9 +355,9 @@ function generateHauntedGraveyard(): LevelSection[] {
     '..##..##..##.SS.##..##.SS.##..##...',
     '###################################',
   ], [
-    e(WW, 4, 1), e(HA, 15, 0), e(GA, 24, 1), e(WW, 32, 1),
-    e(GB, 10, 3), e(SK, 20, 3), e(GB, 28, 3),
-    e(SK, 6, 5), e(GA, 18, 5), e(WW, 30, 5),
+    e(WW, 4, 1), e(HA, 15, 0), e(GA, 24, 0), e(WW, 32, 1),
+    e(GB, 10, 3), e(SM, 20, 3), e(GB, 28, 3),
+    e(SM, 6, 5), e(GA, 18, 0), e(WW, 30, 5),
   ]);
 
   // Section 5: Mausoleum (boss)
@@ -373,14 +372,14 @@ function generateHauntedGraveyard(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateWitchTower(): LevelSection[] {
-  const WZ = EnemyType.WIZARD;
-  const MC = EnemyType.MIMIC_CHEST;
-  const PS = EnemyType.POISON_SKULL;
-  const FE = EnemyType.FLYING_EYE;
-  const BD = EnemyType.BABY_DRAGON;
+  const WZ = EnemyType.WIZARD;           // stationary ranged (magic bolts)
+  const MC = EnemyType.MIMIC_CHEST;      // ambush melee (surprise attack)
+  const MO = EnemyType.MASKED_ORC;       // melee patrol
+  const FE = EnemyType.FLYING_EYE;       // flying ranged (eye beams)
+  const BD = EnemyType.BABY_DRAGON;      // flying ranged (fire breath)
 
   // Section 1: Tower Base (28x10)
-  // Wizards on platforms sniping, mimics hiding near breakables
+  // Baby dragons fly overhead, wizards snipe from platforms, orcs patrol
   const s1 = section([
     '............................',
     '..............---...........',
@@ -393,11 +392,11 @@ function generateWitchTower(): LevelSection[] {
     '..##..VV..##..SSS..##..VV...',
     '############################',
   ], [
-    e(WZ, 10, 3), e(BD, 8, 1), e(FE, 20, 1), e(PS, 16, 4),
-    e(MC, 24, 6), e(WZ, 18, 3), e(PS, 6, 6),
+    e(WZ, 10, 3), e(BD, 8, 0), e(FE, 20, 0), e(MO, 16, 4),
+    e(MC, 24, 6), e(WZ, 18, 3), e(MO, 6, 6),
   ]);
 
-  // Section 2: Alchemy Library (25x14) - vine maze with wizards and mimics
+  // Section 2: Alchemy Library (25x14) - flying eyes above, wizards on ledges, mimics hiding
   const s2 = section([
     '.........................',
     '..---................---.',
@@ -414,12 +413,12 @@ function generateWitchTower(): LevelSection[] {
     '..##..##.SS.VV.##.SS.##..',
     '#########################',
   ], [
-    e(WZ, 4, 1), e(BD, 16, 0), e(FE, 22, 1), e(MC, 10, 3),
-    e(PS, 18, 3), e(WZ, 8, 5), e(FE, 14, 6),
-    e(MC, 22, 7), e(BD, 6, 8), e(PS, 20, 9),
+    e(WZ, 4, 1), e(BD, 16, 0), e(FE, 22, 0), e(MC, 10, 3),
+    e(MO, 18, 3), e(WZ, 8, 5), e(FE, 14, 0),
+    e(MC, 22, 7), e(BD, 6, 0), e(MO, 20, 9),
   ]);
 
-  // Section 3: Tower Ascent (30x14) - zigzag with vine traps and snipers
+  // Section 3: Tower Ascent (30x14) - dragons swoop, wizards on every level
   const s3 = section([
     '..............................',
     '..---....................---..',
@@ -436,12 +435,12 @@ function generateWitchTower(): LevelSection[] {
     '..##..##.SS.VV.##.SS.##.##....',
     '##############################',
   ], [
-    e(BD, 4, 1), e(FE, 24, 0), e(WZ, 14, 3), e(WZ, 22, 3),
-    e(PS, 8, 4), e(MC, 10, 5), e(FE, 18, 5),
-    e(BD, 6, 8), e(PS, 24, 7), e(WZ, 14, 9),
+    e(BD, 4, 0), e(FE, 24, 0), e(WZ, 14, 3), e(WZ, 22, 3),
+    e(MO, 8, 4), e(MC, 10, 5), e(FE, 18, 0),
+    e(BD, 6, 0), e(MO, 24, 7), e(WZ, 14, 9),
   ]);
 
-  // Section 4: Rooftop (30x10) - open sky with flying swarm
+  // Section 4: Rooftop (30x10) - open sky, dragon swarm + wizard snipers
   const s4 = section([
     '..............................',
     '..---........---........---...',
@@ -454,9 +453,9 @@ function generateWitchTower(): LevelSection[] {
     '..VV..##..##.SS.VV..##.SS.##..',
     '##############################',
   ], [
-    e(BD, 4, 1), e(FE, 15, 0), e(BD, 24, 1), e(WZ, 10, 1),
-    e(PS, 20, 3), e(MC, 6, 5), e(WZ, 22, 5),
-    e(FE, 28, 3), e(PS, 14, 5),
+    e(BD, 4, 0), e(FE, 15, 0), e(BD, 24, 0), e(WZ, 10, 1),
+    e(MO, 20, 3), e(MC, 6, 5), e(WZ, 22, 5),
+    e(FE, 28, 0), e(MO, 14, 5),
   ]);
 
   // Section 5: Witch's Sanctum (boss)
@@ -471,14 +470,14 @@ function generateWitchTower(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateBeastDen(): LevelSection[] {
-  const KW = EnemyType.KOBOLD_WARRIOR;
-  const LZ = EnemyType.LIZARDMAN;
-  const SA = EnemyType.SATYR_ARCHER;
-  const GR = EnemyType.GRYPHON;
-  const WW = EnemyType.WEREWOLF;
+  const KW = EnemyType.KOBOLD_WARRIOR;   // melee patrol
+  const CY = EnemyType.CYCLOPS;          // ranged patrol (boulder throw)
+  const SA = EnemyType.SATYR_ARCHER;     // ranged patrol (arrows)
+  const GR = EnemyType.GRYPHON;          // flying dive chase
+  const WW = EnemyType.WEREWOLF;         // melee chase (fast)
 
   // Section 1: Forest Approach (32x10)
-  // Gryphon dive-bombing from sky, archers on tree platforms
+  // Gryphon dive-bombs, archers & cyclops snipe from platforms, werewolves rush
   const s1 = section([
     '................................',
     '..............---...............',
@@ -491,11 +490,11 @@ function generateBeastDen(): LevelSection[] {
     '..##..##..##..SSS..##..##..##...',
     '################################',
   ], [
-    e(SA, 8, 1), e(GR, 18, 0), e(KW, 14, 4), e(LZ, 22, 4),
+    e(SA, 8, 1), e(GR, 18, 0), e(KW, 14, 4), e(CY, 22, 3),
     e(WW, 26, 3), e(KW, 6, 6), e(SA, 28, 6),
   ]);
 
-  // Section 2: Cave Entrance (30x12) - archers sniping from above
+  // Section 2: Cave Entrance (30x12) - cyclops on high ground, gryphon swoops
   const s2 = section([
     '..............................',
     '..---....................---..',
@@ -510,12 +509,12 @@ function generateBeastDen(): LevelSection[] {
     '..##.......##.......##..##....',
     '##############################',
   ], [
-    e(SA, 4, 1), e(GR, 24, 0), e(LZ, 14, 3), e(KW, 22, 3),
+    e(CY, 4, 1), e(GR, 24, 0), e(SA, 14, 3), e(KW, 22, 3),
     e(WW, 8, 5), e(SA, 18, 5), e(KW, 26, 7),
-    e(LZ, 10, 7), e(WW, 20, 9),
+    e(CY, 10, 7), e(WW, 20, 9),
   ]);
 
-  // Section 3: Underground River (35x10) - tight with ambushes
+  // Section 3: Underground River (35x10) - gryphons above, ranged on platforms
   const s3 = section([
     '...................................',
     '..---........---........---........',
@@ -528,12 +527,12 @@ function generateBeastDen(): LevelSection[] {
     '..##..##..##.SS.##..##.SS.##..##...',
     '###################################',
   ], [
-    e(SA, 4, 1), e(GR, 15, 0), e(SA, 24, 1), e(WW, 10, 3),
-    e(LZ, 20, 3), e(KW, 6, 5), e(KW, 28, 5),
-    e(WW, 16, 5), e(LZ, 32, 3),
+    e(SA, 4, 1), e(GR, 15, 0), e(CY, 24, 1), e(WW, 10, 3),
+    e(GR, 20, 0), e(KW, 6, 5), e(KW, 28, 5),
+    e(WW, 16, 5), e(SA, 32, 3),
   ]);
 
-  // Section 4: Deep Cave (30x12) - breakable walls, werewolf rushes
+  // Section 4: Deep Cave (30x12) - all types, heavy resistance
   const s4 = section([
     '..............................',
     '..---....................---..',
@@ -548,9 +547,9 @@ function generateBeastDen(): LevelSection[] {
     '..##.......##.......##..##....',
     '##############################',
   ], [
-    e(GR, 4, 0), e(SA, 24, 1), e(WW, 14, 3), e(LZ, 22, 3),
+    e(GR, 4, 0), e(CY, 24, 1), e(WW, 14, 3), e(SA, 22, 3),
     e(KW, 8, 5), e(SA, 18, 5), e(WW, 26, 7),
-    e(KW, 10, 7), e(LZ, 20, 9),
+    e(KW, 10, 7), e(CY, 20, 9),
   ]);
 
   // Section 5: The Den (boss)
@@ -565,14 +564,13 @@ function generateBeastDen(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateMedusaLair(): LevelSection[] {
-  const SG = EnemyType.STONE_GOLEM;
-  const CY = EnemyType.CYCLOPS;
-  const HA = EnemyType.HARPY;
-  const GA = EnemyType.GARGOYLE;
-  const LZ = EnemyType.LIZARDMAN;
+  const SG = EnemyType.STONE_GOLEM;      // melee patrol (tanky)
+  const CY = EnemyType.CYCLOPS;          // ranged patrol (boulder throw)
+  const HA = EnemyType.HARPY;            // flying dive chase
+  const GA = EnemyType.GARGOYLE;         // flying ambush dive
+  const SK = EnemyType.SKELETON_WARRIOR;  // melee patrol
 
-  // Section 1: Temple Entrance (32x10) - columns with gargoyle ambushes
-  // Stone golems patrol between columns, cyclops snipes from above
+  // Section 1: Temple Entrance (32x10) - harpies swoop, cyclops snipes, golems block
   const s1 = section([
     '................................',
     '..............---...............',
@@ -585,11 +583,11 @@ function generateMedusaLair(): LevelSection[] {
     '..##..##...##..SSS..##..##..##..',
     '################################',
   ], [
-    e(CY, 8, 1), e(HA, 18, 0), e(GA, 14, 3), e(SG, 22, 4),
-    e(LZ, 10, 6), e(LZ, 20, 6), e(GA, 28, 4),
+    e(CY, 8, 1), e(HA, 18, 0), e(GA, 14, 0), e(SG, 22, 4),
+    e(SK, 10, 6), e(SK, 20, 6), e(GA, 28, 0),
   ]);
 
-  // Section 2: Ruined Halls (30x12) - crumbling with heavy guards
+  // Section 2: Ruined Halls (30x12) - harpies above, cyclops on ledges
   const s2 = section([
     '..............................',
     '..---....................---..',
@@ -604,12 +602,12 @@ function generateMedusaLair(): LevelSection[] {
     '..##.......##.......##..##....',
     '##############################',
   ], [
-    e(CY, 4, 1), e(HA, 24, 0), e(SG, 14, 3), e(LZ, 22, 3),
-    e(GA, 8, 5), e(LZ, 18, 5), e(SG, 26, 7),
-    e(GA, 10, 7), e(HA, 20, 9),
+    e(CY, 4, 1), e(HA, 24, 0), e(SG, 14, 3), e(SK, 22, 3),
+    e(GA, 8, 0), e(SK, 18, 5), e(SG, 26, 7),
+    e(GA, 10, 0), e(HA, 20, 0),
   ]);
 
-  // Section 3: Statue Gallery (30x10) - breakable statue ambushes
+  // Section 3: Statue Gallery (30x10) - gargoyle ambushes from above
   const s3 = section([
     '..............................',
     '..---........---........---...',
@@ -622,12 +620,12 @@ function generateMedusaLair(): LevelSection[] {
     '..##..##..##.SS.##..##.SS.##..',
     '##############################',
   ], [
-    e(CY, 4, 1), e(HA, 15, 0), e(CY, 24, 1), e(GA, 10, 3),
-    e(GA, 20, 3), e(SG, 6, 5), e(LZ, 16, 5),
-    e(SG, 28, 5), e(LZ, 12, 7),
+    e(CY, 4, 1), e(HA, 15, 0), e(CY, 24, 1), e(GA, 10, 0),
+    e(GA, 20, 0), e(SG, 6, 5), e(SK, 16, 5),
+    e(SG, 28, 5), e(SK, 12, 7),
   ]);
 
-  // Section 4: Snake Passage (30x12) - winding with heavy resistance
+  // Section 4: Snake Passage (30x12) - heavy resistance, all types
   const s4 = section([
     '..............................',
     '..---....................---..',
@@ -642,9 +640,9 @@ function generateMedusaLair(): LevelSection[] {
     '..##.......##.......##..##....',
     '##############################',
   ], [
-    e(SG, 4, 1), e(HA, 16, 0), e(CY, 24, 1), e(GA, 14, 3),
-    e(LZ, 22, 3), e(SG, 8, 5), e(GA, 18, 5),
-    e(LZ, 26, 7), e(HA, 10, 7), e(CY, 20, 9),
+    e(SG, 4, 1), e(HA, 16, 0), e(CY, 24, 1), e(GA, 14, 0),
+    e(SK, 22, 3), e(SG, 8, 5), e(GA, 18, 0),
+    e(SK, 26, 7), e(HA, 10, 0), e(CY, 20, 9),
   ]);
 
   // Section 5: Medusa's Throne (boss)
@@ -659,13 +657,13 @@ function generateMedusaLair(): LevelSection[] {
 // ════════════════════════════════════════════════════════════════════
 
 function generateDragonSummit(): LevelSection[] {
-  const MT = EnemyType.MINOTAUR;
-  const PY = EnemyType.PYROMANCER;
-  const BD = EnemyType.BABY_DRAGON;
-  const MO = EnemyType.MASKED_ORC;
-  const SG = EnemyType.STONE_GOLEM;
+  const MT = EnemyType.MINOTAUR;         // melee charge (powerful)
+  const PY = EnemyType.PYROMANCER;       // stationary ranged (fire blasts)
+  const BD = EnemyType.BABY_DRAGON;      // flying ranged (fire breath)
+  const SG = EnemyType.STONE_GOLEM;      // melee patrol (tanky)
+  const HA = EnemyType.HARPY;            // flying dive chase
 
-  // Section 1: Mountain Base (32x12) - minotaurs charge, dragons fly
+  // Section 1: Mountain Base (32x12) - dragons and harpies fly, pyromancers snipe
   const s1 = section([
     '................................',
     '..............---...............',
@@ -680,11 +678,11 @@ function generateDragonSummit(): LevelSection[] {
     '..##..VV..##..##.SS.##.##..VV...',
     '################################',
   ], [
-    e(PY, 8, 1), e(BD, 18, 0), e(MT, 14, 4), e(MO, 22, 4),
-    e(SG, 26, 3), e(MO, 6, 6), e(BD, 28, 5),
+    e(PY, 8, 1), e(BD, 18, 0), e(MT, 14, 4), e(HA, 22, 0),
+    e(SG, 26, 3), e(BD, 6, 0), e(HA, 28, 0),
   ]);
 
-  // Section 2: Cliffside Path (35x12) - both barriers, pyromancers snipe
+  // Section 2: Cliffside Path (35x12) - both barriers, heavy air and ranged
   const s2 = section([
     '...................................',
     '..---....................---.......',
@@ -699,12 +697,12 @@ function generateDragonSummit(): LevelSection[] {
     '..##.......VV.......##..VV..##.....',
     '###################################',
   ], [
-    e(BD, 4, 1), e(PY, 24, 1), e(MT, 14, 3), e(SG, 22, 3),
-    e(MO, 8, 5), e(BD, 18, 0), e(PY, 30, 4),
-    e(MT, 10, 7), e(MO, 26, 7), e(SG, 20, 9),
+    e(BD, 4, 0), e(PY, 24, 1), e(MT, 14, 3), e(SG, 22, 3),
+    e(HA, 8, 0), e(BD, 18, 0), e(PY, 30, 4),
+    e(MT, 10, 7), e(HA, 26, 0), e(SG, 20, 9),
   ]);
 
-  // Section 3: Volcano Interior (30x14) - vines, breakable, hardest interior
+  // Section 3: Volcano Interior (30x14) - hardest interior, full mix
   const s3 = section([
     '..............................',
     '..---....................---..',
@@ -721,13 +719,13 @@ function generateDragonSummit(): LevelSection[] {
     '..##..##.SS.VV.##.SS.##.##....',
     '##############################',
   ], [
-    e(BD, 4, 1), e(PY, 24, 0), e(MT, 14, 3), e(SG, 22, 3),
-    e(MO, 8, 5), e(BD, 18, 5), e(PY, 10, 7),
-    e(MT, 20, 7), e(SG, 26, 9), e(MO, 14, 9),
-    e(BD, 6, 11),
+    e(BD, 4, 0), e(PY, 24, 0), e(MT, 14, 3), e(SG, 22, 3),
+    e(HA, 8, 0), e(BD, 18, 0), e(PY, 10, 7),
+    e(MT, 20, 7), e(SG, 26, 9), e(HA, 14, 0),
+    e(BD, 6, 0),
   ]);
 
-  // Section 4: Summit Gauntlet (35x10) - final rush, everything at once
+  // Section 4: Summit Gauntlet (35x10) - final rush, dragons and harpies everywhere
   const s4 = section([
     '...................................',
     '..---........---........---..---...',
@@ -741,8 +739,8 @@ function generateDragonSummit(): LevelSection[] {
     '###################################',
   ], [
     e(MT, 4, 1), e(PY, 15, 1), e(BD, 24, 0), e(SG, 32, 1),
-    e(MO, 10, 3), e(MT, 20, 3), e(MO, 30, 3),
-    e(PY, 6, 5), e(BD, 18, 5), e(SG, 28, 5),
+    e(HA, 10, 0), e(MT, 20, 3), e(HA, 30, 0),
+    e(PY, 6, 5), e(BD, 18, 0), e(SG, 28, 5),
   ]);
 
   // Section 5: Dragon's Peak (larger boss room)
