@@ -743,14 +743,24 @@ function generateDragonSummit(): LevelSection[] {
 
 function bossRoom(width: number, height: number): LevelSection {
   const lines: string[] = [];
+  // Door opening: rows in the middle-lower area of the left wall (3 tiles tall)
+  const doorTop = height - 5;
+  const doorBottom = height - 3;
 
   for (let r = 0; r < height; r++) {
     let line = '';
     for (let c = 0; c < width; c++) {
       if (r === 0 || r >= height - 2) {
         line += '#';  // ceiling and floor
-      } else if (c === 0 || c === width - 1) {
-        line += '#';  // walls
+      } else if (c === 0) {
+        // Left wall: boss door entrance
+        if (r >= doorTop && r <= doorBottom) {
+          line += 'D';  // boss door tiles
+        } else {
+          line += '#';
+        }
+      } else if (c === width - 1) {
+        line += '#';  // right wall
       } else if (r === height - 4 && c === width - 3) {
         line += 'X';  // boss spawn (high enough to not clip floor)
       } else {

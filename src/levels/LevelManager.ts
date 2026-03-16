@@ -16,6 +16,7 @@ export class LevelManager {
   spikeTiles!: Phaser.Physics.Arcade.StaticGroup;
   vineTiles!: Phaser.Physics.Arcade.StaticGroup;
   breakableTiles!: Phaser.Physics.Arcade.StaticGroup;
+  bossDoorTiles!: Phaser.Physics.Arcade.StaticGroup;
 
   // Enemies
   enemies: BaseEnemy[] = [];
@@ -46,6 +47,7 @@ export class LevelManager {
     this.spikeTiles = this.scene.physics.add.staticGroup();
     this.vineTiles = this.scene.physics.add.staticGroup();
     this.breakableTiles = this.scene.physics.add.staticGroup();
+    this.bossDoorTiles = this.scene.physics.add.staticGroup();
 
     // Background
     const bg = this.scene.add.rectangle(
@@ -83,6 +85,9 @@ export class LevelManager {
               break;
             case T.PLAYER_SPAWN:
               this.playerSpawn = { x, y };
+              break;
+            case T.BOSS_DOOR:
+              this.addTile(this.bossDoorTiles, x, y, 'tile_boss_door', 0x884422);
               break;
             case T.BOSS_SPAWN:
               this.bossSpawn = { x, y };
@@ -123,6 +128,23 @@ export class LevelManager {
     if (tint) tile.setTint(tint);
     tile.refreshBody();
     return tile;
+  }
+
+  openBossDoor(): void {
+    this.bossDoorTiles.children.each(child => {
+      const tile = child as Phaser.Physics.Arcade.Sprite;
+      // Door opening particles
+      const particles = this.scene.add.particles(tile.x, tile.y, 'particle', {
+        speed: { min: 40, max: 120 },
+        lifespan: 500,
+        quantity: 6,
+        scale: { start: 1, end: 0 },
+        tint: 0xffdd44,
+      });
+      this.scene.time.delayedCall(600, () => particles.destroy());
+      tile.destroy();
+      return true;
+    });
   }
 
   destroyVineTile(tile: Phaser.Physics.Arcade.Sprite): void {

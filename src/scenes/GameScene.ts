@@ -114,6 +114,9 @@ export class GameScene extends Phaser.Scene {
     // Player vs breakable blocks
     this.physics.add.collider(this.player, this.levelManager.breakableTiles);
 
+    // Player vs boss door (solid barrier until opened)
+    this.physics.add.collider(this.player, this.levelManager.bossDoorTiles);
+
     // Set up enemy collisions
     this.levelManager.enemies.forEach(enemy => {
       enemy.setPlayerReference(this.player);
@@ -358,12 +361,57 @@ export class GameScene extends Phaser.Scene {
 
   private checkBossRoomEntry(): void {
     if (this.bossActive || this.bossDefeated) return;
-    if (!this.levelManager.bossRoomBounds) return;
+    if (this.levelManager.bossDoorTiles.countActive() === 0) return;
 
-    const bounds = this.levelManager.bossRoomBounds;
-    if (this.player.x >= bounds.left && this.player.x <= bounds.right) {
-      this.startBossFight();
+    // Check if player is near the boss door
+    let nearDoor = false;
+    this.levelManager.bossDoorTiles.children.each(child => {
+      const tile = child as Phaser.Physics.Arcade.Sprite;
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, tile.x, tile.y);
+      if (dist < 48) nearDoor = true;
+      return true;
+    });
+
+    if (nearDoor) {
+      this.openBossDoor();
     }
+  }
+
+  private openBossDoor(): void {
+    // Freeze player briefly for dramatic effect
+    const body = this.player.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0);
+    body.setAllowGravity(false);
+
+    // Camera shake
+    this.cameras.main.shake(300, 0.005);
+
+    // Open the door
+    this.levelManager.openBossDoor();
+
+    // Store door positions before they're destroyed
+    const doorPositions: { x: number; y: number }[] = [];
+    this.levelManager.bossDoorTiles.children.each(child => {
+      const tile = child as Phaser.Physics.Arcade.Sprite;
+      doorPositions.push({ x: tile.x, y: tile.y });
+      return true;
+    });
+
+    // Brief pause then resume, seal the room, and start boss fight
+    this.time.delayedCall(500, () => {
+      body.setAllowGravity(true);
+
+      // Seal the entrance with solid tiles so player can't leave
+      doorPositions.forEach(pos => {
+        const seal = this.levelManager.solidTiles.create(pos.x, pos.y, 'tile_solid') as Phaser.Physics.Arcade.Sprite;
+        seal.setDisplaySize(TILE_SIZE, TILE_SIZE);
+        seal.setDepth(DEPTH.TILES);
+        seal.setTint(0x664422);
+        seal.refreshBody();
+      });
+
+      this.startBossFight();
+    });
   }
 
   private startBossFight(): void {
