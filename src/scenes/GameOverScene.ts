@@ -16,6 +16,8 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.menuItems = [];
+    this.selectedIndex = 0;
     this.cameras.main.setBackgroundColor(0x0a0000);
 
     this.add.text(GAME_WIDTH / 2, 60, 'GAME OVER', {

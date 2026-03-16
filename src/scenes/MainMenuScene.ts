@@ -30,6 +30,8 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.menuItems = [];
+    this.selectedIndex = 0;
     this.cameras.main.setBackgroundColor(0x0a0a1a);
 
     // Title

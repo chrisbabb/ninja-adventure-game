@@ -18,6 +18,8 @@ export class VictoryScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.menuItems = [];
+    this.selectedIndex = 0;
     this.cameras.main.setBackgroundColor(0x0a0a1a);
 
     this.add.text(GAME_WIDTH / 2, 40, 'STAGE CLEAR!', {

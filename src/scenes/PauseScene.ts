@@ -11,6 +11,8 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.menuItems = [];
+    this.selectedIndex = 0;
     // Dim overlay
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.6);
 

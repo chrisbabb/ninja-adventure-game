@@ -26,6 +26,10 @@ export class StageSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.stages = [];
+    this.stageTexts = [];
+    this.portraits = [];
+    this.selectedIndex = 0;
     this.saveSystem.load();
     this.cameras.main.setBackgroundColor(0x0a0a1a);
 
