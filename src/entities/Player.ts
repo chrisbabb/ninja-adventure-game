@@ -74,8 +74,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   onDeath: (() => void) | null = null;
   onHealthChange: ((health: number, maxHealth: number) => void) | null = null;
 
-  // Wall slide
+  // Wall slide / wall jump
   private wallSlideDir: number = 0;
+  private wallJumpLockTimer: number = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -152,6 +153,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.isGrounded) {
       this.jumpsRemaining = stats.maxJumps;
       this.coyoteTimer = COYOTE_TIME;
+      this.wallJumpLockTimer = 0;
       this.fastRunning = this.fastRunning && (this.cursors.left.isDown || this.cursors.right.isDown);
     } else {
       this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
@@ -190,26 +192,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.detectDoubleTap(time);
     }
 
-    let moveSpeed = stats.speed;
-    if (this.fastRunning) {
-      moveSpeed = WOLF_FAST_RUN_SPEED;
-    }
+    // Wall jump lock prevents input from overriding wall jump velocity
+    if (this.wallJumpLockTimer > 0) {
+      this.wallJumpLockTimer -= delta;
+    } else {
+      let moveSpeed = stats.speed;
+      if (this.fastRunning) {
+        moveSpeed = WOLF_FAST_RUN_SPEED;
+      }
 
-    let moveX = 0;
-    if (this.cursors.left.isDown) {
-      moveX = -moveSpeed;
-      this.facingRight = false;
-    } else if (this.cursors.right.isDown) {
-      moveX = moveSpeed;
-      this.facingRight = true;
-    }
+      let moveX = 0;
+      if (this.cursors.left.isDown) {
+        moveX = -moveSpeed;
+        this.facingRight = false;
+      } else if (this.cursors.right.isDown) {
+        moveX = moveSpeed;
+        this.facingRight = true;
+      }
 
-    body.setVelocityX(moveX);
+      body.setVelocityX(moveX);
+    }
     this.setFlipX(!this.facingRight);
 
     // ── Wall Slide ──
     this.wallSlideDir = 0;
-    if (!this.isGrounded && ((body.blocked.left && this.cursors.left.isDown) || (body.blocked.right && this.cursors.right.isDown))) {
+    if (!this.isGrounded && this.wallJumpLockTimer <= 0 &&
+        ((body.blocked.left && this.cursors.left.isDown) || (body.blocked.right && this.cursors.right.isDown))) {
       this.wallSlideDir = body.blocked.left ? -1 : 1;
       if (body.velocity.y > 50) {
         body.setVelocityY(50); // Slow fall
@@ -220,24 +228,24 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // ── Jump ──
     this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
 
-    if (Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up)) {
+    const jumpJustPressed = Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up);
+    if (jumpJustPressed) {
       this.jumpBufferTimer = JUMP_BUFFER_TIME;
     }
 
-    if (this.jumpBufferTimer > 0) {
+    // Wall jump takes priority over regular jump
+    if (this.wallSlideDir !== 0 && jumpJustPressed) {
+      body.setVelocityX(-this.wallSlideDir * stats.speed * 1.3);
+      body.setVelocityY(stats.jumpForce * 0.85);
+      this.facingRight = this.wallSlideDir < 0;
+      this.wallJumpLockTimer = 150; // Brief lock so input doesn't override kick-off
+      this.jumpsRemaining = Math.max(1, this.jumpsRemaining); // Restore one air jump
+      this.jumpBufferTimer = 0;
+    } else if (this.jumpBufferTimer > 0) {
       if (this.coyoteTimer > 0 || this.jumpsRemaining > 0) {
         this.performJump(stats);
         this.jumpBufferTimer = 0;
       }
-    }
-
-    // Wall jump
-    if (this.wallSlideDir !== 0 &&
-        (Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up))) {
-      body.setVelocityX(-this.wallSlideDir * stats.speed * 1.2);
-      body.setVelocityY(stats.jumpForce * 0.9);
-      this.facingRight = this.wallSlideDir < 0;
-      this.jumpsRemaining = Math.max(0, this.jumpsRemaining - 1);
     }
 
     // ── Attack ──
@@ -260,7 +268,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // ── State Update ──
     if (this.isGrounded) {
-      if (Math.abs(moveX) > 0) {
+      if (Math.abs(body.velocity.x) > 0) {
         this.state = PlayerState.RUN;
       } else {
         this.state = PlayerState.IDLE;
