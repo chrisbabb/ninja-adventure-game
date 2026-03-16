@@ -65,7 +65,7 @@ export class LevelManager {
         for (let c = 0; c < section.tiles[r].length; c++) {
           const tileType = section.tiles[r][c];
           const x = offset.x + c * TILE_SIZE + TILE_SIZE / 2;
-          const y = r * TILE_SIZE + TILE_SIZE / 2;
+          const y = offset.y + r * TILE_SIZE + TILE_SIZE / 2;
 
           switch (tileType) {
             case T.SOLID:
@@ -99,7 +99,7 @@ export class LevelManager {
       // Spawn enemies
       section.enemies.forEach(spawn => {
         const ex = offset.x + spawn.col * TILE_SIZE + TILE_SIZE / 2;
-        const ey = spawn.row * TILE_SIZE + TILE_SIZE / 2;
+        const ey = offset.y + spawn.row * TILE_SIZE + TILE_SIZE / 2;
         const enemy = createEnemy(this.scene, ex, ey, spawn.type, healthMult, damageMult, speedMult);
         this.enemies.push(enemy);
       });
@@ -109,8 +109,8 @@ export class LevelManager {
         this.bossRoomBounds = {
           left: offset.x + TILE_SIZE,
           right: offset.x + section.tiles[0].length * TILE_SIZE - TILE_SIZE,
-          top: TILE_SIZE,
-          bottom: section.tiles.length * TILE_SIZE - TILE_SIZE * 2,
+          top: offset.y + TILE_SIZE,
+          bottom: offset.y + section.tiles.length * TILE_SIZE - TILE_SIZE * 2,
         };
       }
     });

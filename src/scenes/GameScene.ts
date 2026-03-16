@@ -386,9 +386,6 @@ export class GameScene extends Phaser.Scene {
     // Camera shake
     this.cameras.main.shake(300, 0.005);
 
-    // Open the door
-    this.levelManager.openBossDoor();
-
     // Store door positions before they're destroyed
     const doorPositions: { x: number; y: number }[] = [];
     this.levelManager.bossDoorTiles.children.each(child => {
@@ -396,6 +393,9 @@ export class GameScene extends Phaser.Scene {
       doorPositions.push({ x: tile.x, y: tile.y });
       return true;
     });
+
+    // Open the door (destroys door tiles with particle effect)
+    this.levelManager.openBossDoor();
 
     // Brief pause then resume, seal the room, and start boss fight
     this.time.delayedCall(500, () => {

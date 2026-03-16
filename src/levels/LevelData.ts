@@ -64,16 +64,20 @@ function e(type: EnemyType, col: number, row: number): EnemySpawn {
 // ── Stage-specific level generators ────────────────────────────────
 
 export function generateLevel(stageId: StageId): LevelSection[] {
+  let sections: LevelSection[];
   switch (stageId) {
-    case StageId.HUGE_KNIGHT: return generateKnightFortress();
-    case StageId.DEMON_BOSS: return generateDemonInferno();
-    case StageId.HEADLESS_HORSEMAN: return generateHauntedGraveyard();
-    case StageId.WITCH: return generateWitchTower();
-    case StageId.CERBERUS: return generateBeastDen();
-    case StageId.MEDUSA: return generateMedusaLair();
-    case StageId.DRAGON: return generateDragonSummit();
-    default: return generateKnightFortress();
+    case StageId.HUGE_KNIGHT: sections = generateKnightFortress(); break;
+    case StageId.DEMON_BOSS: sections = generateDemonInferno(); break;
+    case StageId.HEADLESS_HORSEMAN: sections = generateHauntedGraveyard(); break;
+    case StageId.WITCH: sections = generateWitchTower(); break;
+    case StageId.CERBERUS: sections = generateBeastDen(); break;
+    case StageId.MEDUSA: sections = generateMedusaLair(); break;
+    case StageId.DRAGON: sections = generateDragonSummit(); break;
+    default: sections = generateKnightFortress(); break;
   }
+  fixSectionTransitions(sections);
+  fixEnemyPositions(sections);
+  return sections;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -773,6 +777,117 @@ function bossRoom(width: number, height: number): LevelSection {
   return section(lines, [], true);
 }
 
+// ── Post-processing: fix section transitions & enemy positions ────
+
+function isOccupied(tiles: number[][], col: number, row: number): boolean {
+  if (row < 0 || row >= tiles.length || col < 0 || col >= tiles[0].length) return false;
+  const t = tiles[row][col];
+  return t === T.SOLID || t === T.BREAKABLE || t === T.VINE || t === T.SPIKE || t === T.BOSS_DOOR;
+}
+
+/**
+ * Opens 3-tile-high passages at section boundaries so the player can
+ * traverse between sections. Aligns passages at the floor level
+ * (accounting for bottom-alignment of different-height sections).
+ */
+function fixSectionTransitions(sections: LevelSection[]): void {
+  const maxHeight = Math.max(...sections.map(s => s.tiles.length));
+
+  for (let i = 0; i < sections.length - 1; i++) {
+    const current = sections[i];
+    const next = sections[i + 1];
+
+    // Boss room transitions are handled by boss door tiles
+    if (next.isBossRoom) {
+      // Still need to open the right edge of the previous section
+      // to connect to the boss door
+      const rightCol = current.tiles[0].length - 1;
+      const curYOffset = maxHeight - current.tiles.length;
+      const nextYOffset = maxHeight - next.tiles.length;
+
+      // Find the boss door rows in absolute coordinates
+      const doorTop = next.tiles.length - 5;
+      const doorBottom = next.tiles.length - 3;
+
+      for (let dr = doorTop; dr <= doorBottom; dr++) {
+        const absRow = dr + nextYOffset;
+        const curRow = absRow - curYOffset;
+        if (curRow >= 0 && curRow < current.tiles.length) {
+          current.tiles[curRow][rightCol] = T.EMPTY;
+        }
+      }
+      // Ensure floor below the opening
+      const floorAbsRow = doorBottom + 1 + nextYOffset;
+      const curFloorRow = floorAbsRow - curYOffset;
+      if (curFloorRow >= 0 && curFloorRow < current.tiles.length) {
+        if (current.tiles[curFloorRow][rightCol] === T.EMPTY) {
+          current.tiles[curFloorRow][rightCol] = T.SOLID;
+        }
+      }
+      continue;
+    }
+
+    const curYOffset = maxHeight - current.tiles.length;
+    const nextYOffset = maxHeight - next.tiles.length;
+    const rightCol = current.tiles[0].length - 1;
+    const leftCol = 0;
+
+    // Find the floor row in current section's right column (bottommost solid row)
+    let curFloorRow = current.tiles.length - 1;
+    for (let r = current.tiles.length - 1; r >= 0; r--) {
+      if (current.tiles[r][rightCol] === T.SOLID) {
+        curFloorRow = r;
+        break;
+      }
+    }
+
+    // Absolute floor position
+    const floorAbs = curFloorRow + curYOffset;
+
+    // Open a 3-tile-high passage above the floor on both sides
+    for (let dy = 1; dy <= 3; dy++) {
+      const absRow = floorAbs - dy;
+
+      const curRow = absRow - curYOffset;
+      if (curRow >= 0 && curRow < current.tiles.length) {
+        current.tiles[curRow][rightCol] = T.EMPTY;
+      }
+
+      const nextRow = absRow - nextYOffset;
+      if (nextRow >= 0 && nextRow < next.tiles.length) {
+        next.tiles[nextRow][leftCol] = T.EMPTY;
+      }
+    }
+
+    // Ensure floor exists at the boundary
+    const nextFloorRow = floorAbs - nextYOffset;
+    if (nextFloorRow >= 0 && nextFloorRow < next.tiles.length) {
+      if (next.tiles[nextFloorRow][leftCol] === T.EMPTY) {
+        next.tiles[nextFloorRow][leftCol] = T.SOLID;
+      }
+    }
+    if (curFloorRow >= 0 && curFloorRow < current.tiles.length) {
+      if (current.tiles[curFloorRow][rightCol] === T.EMPTY) {
+        current.tiles[curFloorRow][rightCol] = T.SOLID;
+      }
+    }
+  }
+}
+
+/**
+ * Ensures no enemy is spawned inside a solid/breakable/vine/spike tile.
+ * Moves them upward until they're in empty space.
+ */
+function fixEnemyPositions(sections: LevelSection[]): void {
+  for (const section of sections) {
+    for (const enemy of section.enemies) {
+      while (enemy.row > 0 && isOccupied(section.tiles, enemy.col, enemy.row)) {
+        enemy.row--;
+      }
+    }
+  }
+}
+
 // ── Utility exports ────────────────────────────────────────────────
 
 export function getSectionWorldOffset(sections: LevelSection[], sectionIndex: number): { x: number; y: number } {
@@ -780,7 +895,11 @@ export function getSectionWorldOffset(sections: LevelSection[], sectionIndex: nu
   for (let i = 0; i < sectionIndex; i++) {
     offsetX += sections[i].tiles[0].length * TILE_SIZE;
   }
-  return { x: offsetX, y: 0 };
+  // Bottom-align sections so floors match across different heights
+  const maxHeight = Math.max(...sections.map(s => s.tiles.length));
+  const sectionHeight = sections[sectionIndex].tiles.length;
+  const offsetY = (maxHeight - sectionHeight) * TILE_SIZE;
+  return { x: offsetX, y: offsetY };
 }
 
 export function getTotalLevelWidth(sections: LevelSection[]): number {
