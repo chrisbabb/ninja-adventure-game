@@ -63,10 +63,16 @@ export class BaseBoss extends Phaser.Physics.Arcade.Sprite {
     this.setDisplaySize(config.width, config.height);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setSize(config.width * 0.8, config.height * 0.85);
+    // Use the display size for the physics body
+    const bw = config.width * 0.8;
+    const bh = config.height * 0.85;
+    body.setSize(bw, bh);
+    // Center the body within the display size
+    const scaleX = this.scaleX || 1;
+    const scaleY = this.scaleY || 1;
     body.setOffset(
-      (this.width - config.width * 0.8) / 2,
-      (this.height - config.height * 0.85),
+      (this.width - bw / scaleX) / 2,
+      this.height - bh / scaleY,
     );
     body.setCollideWorldBounds(false);
 
@@ -78,6 +84,7 @@ export class BaseBoss extends Phaser.Physics.Arcade.Sprite {
     this.projectiles = scene.physics.add.group({
       classType: Projectile,
       runChildUpdate: true,
+      allowGravity: false,
     });
   }
 

@@ -278,8 +278,8 @@ function createBossRoom(): LevelSection {
     tiles.push(row);
   }
 
-  // Boss spawn at far side
-  tiles[H - 3][W - 3] = T.BOSS_SPAWN;
+  // Boss spawn at far side (row H-4 so tall bosses don't clip into floor)
+  tiles[H - 4][W - 3] = T.BOSS_SPAWN;
 
   return { tiles, enemies: [], isBossRoom: true };
 }

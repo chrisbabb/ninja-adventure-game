@@ -130,9 +130,9 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Player projectiles vs enemy
-      this.physics.add.overlap(this.player.projectiles, enemy, (proj, en) => {
-        const projectile = proj as Projectile;
-        const target = en as BaseEnemy;
+      this.physics.add.overlap(this.player.projectiles, enemy, (a, b) => {
+        const projectile = (a instanceof Projectile ? a : b) as Projectile;
+        const target = (a instanceof BaseEnemy ? a : b) as BaseEnemy;
         if (target.isAlive()) {
           target.takeDamage(projectile.damage);
           if (!projectile.piercing) projectile.destroy();
@@ -140,8 +140,8 @@ export class GameScene extends Phaser.Scene {
       });
 
       // Enemy projectiles vs player
-      this.physics.add.overlap(enemy.projectiles, this.player, (proj) => {
-        const projectile = proj as Projectile;
+      this.physics.add.overlap(enemy.projectiles, this.player, (a, b) => {
+        const projectile = (a instanceof Projectile ? a : b) as Projectile;
         this.player.takeDamage(projectile.damage);
         projectile.destroy();
       });
@@ -179,8 +179,8 @@ export class GameScene extends Phaser.Scene {
         this.physics.add.overlap(this.player, enemy, () => {
           if (enemy.isAlive()) this.player.takeDamage(enemy.damage);
         });
-        this.physics.add.overlap(this.player.projectiles, enemy, (proj) => {
-          const projectile = proj as Projectile;
+        this.physics.add.overlap(this.player.projectiles, enemy, (a, b) => {
+          const projectile = (a instanceof Projectile ? a : b) as Projectile;
           if (enemy.isAlive()) {
             enemy.takeDamage(projectile.damage);
             if (!projectile.piercing) projectile.destroy();
@@ -390,18 +390,18 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.boss, this.levelManager.solidTiles);
 
     // Boss projectiles vs player
-    this.physics.add.overlap(this.boss.projectiles, this.player, (proj) => {
-      const projectile = proj as Projectile;
+    this.physics.add.overlap(this.boss.projectiles, this.player, (a, b) => {
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
       this.player.takeDamage(projectile.damage);
       projectile.destroy();
     });
 
     // Player projectiles vs boss
-    this.physics.add.overlap(this.player.projectiles, this.boss, (proj, bossSprite) => {
-      const projectile = proj as Projectile;
-      const b = bossSprite as BaseBoss;
-      if (b.isAlive()) {
-        b.takeDamage(projectile.damage, this.formSystem.getCurrentForm());
+    this.physics.add.overlap(this.player.projectiles, this.boss, (a, b) => {
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
+      const bossRef = (a instanceof BaseBoss ? a : b) as BaseBoss;
+      if (bossRef.isAlive()) {
+        bossRef.takeDamage(projectile.damage, this.formSystem.getCurrentForm());
         if (!projectile.piercing) projectile.destroy();
       }
     });

@@ -32,11 +32,21 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.piercing = piercing;
 
     this.setDepth(DEPTH.PROJECTILES);
-    this.setVelocity(velocityX, velocityY);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setSize(this.width, this.height);
+
+    // Set velocity AFTER disabling gravity to prevent frame-1 drop
+    body.setVelocity(velocityX, velocityY);
+  }
+
+  // Re-apply gravity override when added to a group (groups can reset it)
+  addedToScene(): void {
+    super.addedToScene();
+    if (this.body) {
+      (this.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+    }
   }
 
   update(time: number): void {

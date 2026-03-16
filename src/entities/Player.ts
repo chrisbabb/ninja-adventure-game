@@ -117,6 +117,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.projectiles = scene.physics.add.group({
       classType: Projectile,
       runChildUpdate: true,
+      allowGravity: false,
     });
 
     this.applyFormStats();
