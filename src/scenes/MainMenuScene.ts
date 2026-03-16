@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS, Difficulty } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT } from '../constants';
+import { SaveSystem } from '../systems/SaveSystem';
 
 export class MainMenuScene extends Phaser.Scene {
   private selectedIndex: number = 0;
@@ -153,9 +154,15 @@ export class MainMenuScene extends Phaser.Scene {
 
   private selectItem(): void {
     switch (this.selectedIndex) {
-      case 0: // Start Game
-        this.registry.set('difficulty', this.difficulty);
-        this.scene.start(SCENE_KEYS.STAGE_SELECT);
+      case 0: // Start Game - always fresh run
+        {
+          const save = new SaveSystem();
+          save.load();
+          save.resetProgress(); // clears bosses/forms but keeps hard mode unlock
+          save.setDifficulty(this.difficulty);
+          this.registry.set('difficulty', this.difficulty);
+          this.scene.start(SCENE_KEYS.STAGE_SELECT);
+        }
         break;
       case 1: // Difficulty (handled by left/right)
         this.cycleDifficulty(1);

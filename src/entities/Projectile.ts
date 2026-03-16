@@ -5,9 +5,14 @@ import { DEPTH } from '../constants';
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
   owner: ProjectileOwner;
   damage: number;
+  piercing: boolean;
+
   private lifetime: number;
   private spawnTime: number;
-  piercing: boolean;
+  // Store intended velocity so it survives group.add() resetting the body
+  private intendedVelX: number;
+  private intendedVelY: number;
+  private velocityApplied: boolean = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -30,26 +35,36 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.lifetime = lifetime;
     this.spawnTime = scene.time.now;
     this.piercing = piercing;
+    this.intendedVelX = velocityX;
+    this.intendedVelY = velocityY;
 
     this.setDepth(DEPTH.PROJECTILES);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setSize(this.width, this.height);
-
-    // Set velocity AFTER disabling gravity to prevent frame-1 drop
     body.setVelocity(velocityX, velocityY);
   }
 
-  // Re-apply gravity override when added to a group (groups can reset it)
-  addedToScene(): void {
-    super.addedToScene();
-    if (this.body) {
-      (this.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+  // Called every frame by Phaser - re-apply velocity if group.add() wiped it
+  preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+
+    if (!this.velocityApplied && this.body) {
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      body.setAllowGravity(false);
+      // Check if velocity was zeroed out by group.add()
+      if (body.velocity.x === 0 && body.velocity.y === 0 &&
+          (this.intendedVelX !== 0 || this.intendedVelY !== 0)) {
+        body.setVelocity(this.intendedVelX, this.intendedVelY);
+      }
+      this.velocityApplied = true;
     }
   }
 
   update(time: number): void {
+    if (!this.active || !this.body) return;
+
     if (time - this.spawnTime > this.lifetime) {
       this.destroy();
       return;
