@@ -1,7 +1,8 @@
 import { StageId, EnemyType } from '../types';
 import { TILE_SIZE } from '../constants';
 
-// Tile types for level layout
+// ── Tile Types ─────────────────────────────────────────────────────
+
 export const T = {
   EMPTY: 0,
   SOLID: 1,
@@ -26,263 +27,745 @@ export interface LevelSection {
   isBossRoom?: boolean;
 }
 
-// Helper to create a flat ground section
-function groundSection(width: number, height: number): number[][] {
-  const tiles: number[][] = [];
-  for (let r = 0; r < height; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < width; c++) {
-      if (r >= height - 2) {
-        row.push(T.SOLID); // Ground
-      } else if (r === 0 || c === 0 || c === width - 1) {
-        row.push(T.EMPTY); // Open top and sides
-      } else {
-        row.push(T.EMPTY);
-      }
-    }
-    tiles.push(row);
-  }
-  return tiles;
+// ── String-based tile map parser ───────────────────────────────────
+// Each char maps to a tile type for readable level design:
+//   .  = empty       #  = solid      -  = platform
+//   S  = spike       V  = vine       B  = breakable
+//   @  = player      X  = boss       D  = boss door
+
+const CHAR_MAP: Record<string, number> = {
+  '.': T.EMPTY,
+  '#': T.SOLID,
+  '-': T.PLATFORM,
+  'S': T.SPIKE,
+  'V': T.VINE,
+  'B': T.BREAKABLE,
+  'D': T.BOSS_DOOR,
+  '@': T.PLAYER_SPAWN,
+  'X': T.BOSS_SPAWN,
+};
+
+function parseMap(lines: string[]): number[][] {
+  return lines.map(line =>
+    line.split('').map(ch => CHAR_MAP[ch] ?? T.EMPTY)
+  );
 }
 
-// Generate a complete level for a stage
+function section(map: string[], enemies: EnemySpawn[], isBossRoom?: boolean): LevelSection {
+  return { tiles: parseMap(map), enemies, isBossRoom };
+}
+
+// ── Enemy shorthand ────────────────────────────────────────────────
+
+function e(type: EnemyType, col: number, row: number): EnemySpawn {
+  return { type, col, row };
+}
+
+// ── Stage-specific level generators ────────────────────────────────
+
 export function generateLevel(stageId: StageId): LevelSection[] {
-  const sections: LevelSection[] = [];
-  const stageEnemies = getStageEnemies(stageId);
-
-  // Section 1: Start area (easy, tutorial-ish)
-  sections.push(createSection1(stageEnemies));
-
-  // Section 2: Platforming challenge
-  sections.push(createSection2(stageEnemies, stageId));
-
-  // Section 3: Enemy gauntlet
-  sections.push(createSection3(stageEnemies, stageId));
-
-  // Section 4: Vertical/mixed challenge
-  sections.push(createSection4(stageEnemies, stageId));
-
-  // Section 5: Boss room
-  sections.push(createBossRoom());
-
-  return sections;
+  switch (stageId) {
+    case StageId.HUGE_KNIGHT: return generateKnightFortress();
+    case StageId.DEMON_BOSS: return generateDemonInferno();
+    case StageId.HEADLESS_HORSEMAN: return generateHauntedGraveyard();
+    case StageId.WITCH: return generateWitchTower();
+    case StageId.CERBERUS: return generateBeastDen();
+    case StageId.MEDUSA: return generateMedusaLair();
+    case StageId.DRAGON: return generateDragonSummit();
+    default: return generateKnightFortress();
+  }
 }
 
-function getStageEnemies(stageId: StageId): EnemyType[] {
-  const stageEnemyMap: Record<StageId, EnemyType[]> = {
-    [StageId.HUGE_KNIGHT]: [EnemyType.DWARF_WARRIOR, EnemyType.SKELETON_WARRIOR, EnemyType.STONE_GOLEM, EnemyType.GOBLIN, EnemyType.MASKED_ORC],
-    [StageId.DEMON_BOSS]: [EnemyType.IMP, EnemyType.PYROMANCER, EnemyType.SKELETON_MAGE, EnemyType.FLYING_EYE, EnemyType.POISON_SKULL],
-    [StageId.HEADLESS_HORSEMAN]: [EnemyType.WEREWOLF, EnemyType.GARGOYLE, EnemyType.SKELETON_WARRIOR, EnemyType.GOBLIN, EnemyType.HARPY],
-    [StageId.WITCH]: [EnemyType.WIZARD, EnemyType.MIMIC_CHEST, EnemyType.POISON_SKULL, EnemyType.FLYING_EYE, EnemyType.BABY_DRAGON],
-    [StageId.CERBERUS]: [EnemyType.KOBOLD_WARRIOR, EnemyType.LIZARDMAN, EnemyType.SATYR_ARCHER, EnemyType.GRYPHON, EnemyType.WEREWOLF],
-    [StageId.MEDUSA]: [EnemyType.STONE_GOLEM, EnemyType.CYCLOPS, EnemyType.HARPY, EnemyType.GARGOYLE, EnemyType.LIZARDMAN],
-    [StageId.DRAGON]: [EnemyType.MINOTAUR, EnemyType.PYROMANCER, EnemyType.BABY_DRAGON, EnemyType.MASKED_ORC, EnemyType.STONE_GOLEM],
-  };
-  return stageEnemyMap[stageId] || [];
+// ════════════════════════════════════════════════════════════════════
+// STAGE 1: KNIGHT'S FORTRESS  (Huge Knight)
+// Theme: Stone castle, ramparts, guard towers, breakable walls
+// ════════════════════════════════════════════════════════════════════
+
+function generateKnightFortress(): LevelSection[] {
+  const DW = EnemyType.DWARF_WARRIOR;
+  const SK = EnemyType.SKELETON_WARRIOR;
+  const SG = EnemyType.STONE_GOLEM;
+  const GB = EnemyType.GOBLIN;
+  const MO = EnemyType.MASKED_ORC;
+
+  // Section 1: Castle Gate (30x10)
+  const s1 = section([
+    '..............................',
+    '..............##..............',
+    '.............####.............',
+    '...........########...........',
+    '...@.......#....#.............',
+    '..##......##....##..........##',
+    '..##..--..##....##...--...###.',
+    '..##......##....##........###.',
+    '####..##########..####..#####.',
+    '##############################',
+  ], [
+    e(GB, 7, 7), e(DW, 16, 3), e(GB, 22, 5), e(SK, 27, 5),
+  ]);
+
+  // Section 2: Courtyard & Ramparts (35x12)
+  const s2 = section([
+    '...................................',
+    '#.......................#..#..#..#.',
+    '#.......................#..#..#..#.',
+    '#...---.............--..#..#..#..#.',
+    '#.....................#.........#..',
+    '#..........--........#.........#..',
+    '#.............##.....#...--....#..',
+    '#..##..BB..####......#........##..',
+    '####..........###..###...##..###..',
+    '####..........###..###..###..###..',
+    '####.SSSS.....###..########..###..',
+    '###################################',
+  ], [
+    e(DW, 5, 7), e(SK, 10, 7), e(GB, 15, 8), e(MO, 20, 4),
+    e(GB, 25, 1), e(DW, 29, 1), e(SK, 32, 7),
+  ]);
+
+  // Section 3: Tower Ascent (18x18) - vertical climb
+  const s3 = section([
+    '##################',
+    '#................#',
+    '#..---...........#',
+    '#................#',
+    '#.........---....#',
+    '#................#',
+    '#....---..BB..#..#',
+    '#.............#..#',
+    '#..BB...---...#..#',
+    '#.............#..#',
+    '#.......---......#',
+    '#................#',
+    '#...---..........#',
+    '#................#',
+    '#.........---....#',
+    '#................#',
+    '#...............##',
+    '##################',
+  ], [
+    e(SK, 8, 4), e(DW, 5, 8), e(GB, 10, 10), e(SK, 6, 14),
+    e(MO, 12, 12), e(GB, 4, 6),
+  ]);
+
+  // Section 4: Rampart Run (35x10) - horizontal with gaps
+  const s4 = section([
+    '...................................',
+    '#..............#.................#.',
+    '#..............#.................#.',
+    '#..............B.................#.',
+    '#.........---..B..---...........##.',
+    '###.............B.......---.....##.',
+    '###.....##..............###..BB.##.',
+    '###.....##..SSS..###...####..#####.',
+    '####....##.......####.############.',
+    '###################################',
+  ], [
+    e(DW, 6, 5), e(SG, 12, 6), e(SK, 18, 4), e(MO, 24, 4),
+    e(GB, 28, 5), e(DW, 32, 5),
+  ]);
+
+  // Section 5: Throne Room (boss)
+  const s5 = bossRoom(18, 11);
+
+  return [s1, s2, s3, s4, s5];
 }
 
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+// ════════════════════════════════════════════════════════════════════
+// STAGE 2: DEMON'S INFERNO  (Demon Boss)
+// Theme: Volcanic, lava pits, fire, vine barriers
+// ════════════════════════════════════════════════════════════════════
+
+function generateDemonInferno(): LevelSection[] {
+  const IM = EnemyType.IMP;
+  const PY = EnemyType.PYROMANCER;
+  const SM = EnemyType.SKELETON_MAGE;
+  const FE = EnemyType.FLYING_EYE;
+  const PS = EnemyType.POISON_SKULL;
+
+  // Section 1: Volcanic Entrance (32x10)
+  const s1 = section([
+    '................................',
+    '................................',
+    '..@.............................',
+    '..##...........---..........##..',
+    '..##........................##..',
+    '..###...--..............--..##..',
+    '..###..........---........####..',
+    '..####....##........##..######..',
+    '..####.SS.####..SSS.####.####..',
+    '################################',
+  ], [
+    e(IM, 10, 2), e(PS, 16, 4), e(PY, 22, 5), e(SM, 28, 3),
+  ]);
+
+  // Section 2: Fire Corridors with vine barriers (30x12)
+  const s2 = section([
+    '..............................',
+    '#............................#',
+    '#..VV....................VV..#',
+    '#..VV..---..........---..VV..#',
+    '#..VV...............V....VV..#',
+    '#...................V........#',
+    '#......---..........V.--....#',
+    '#........##.........V.......#',
+    '##........##..VV..###..##..##',
+    '##....SS..###..V..###..##..##',
+    '##........####....########..#',
+    '##############################',
+  ], [
+    e(PY, 5, 5), e(IM, 12, 3), e(FE, 18, 2), e(PS, 22, 5),
+    e(SM, 26, 7), e(IM, 8, 7),
+  ]);
+
+  // Section 3: Lava Platforms (35x10) - spike pits everywhere
+  const s3 = section([
+    '...................................',
+    '...................................',
+    '...........---..............---....',
+    '...................................',
+    '..---..........---..........VV.....',
+    '...............VV...---....VV.....',
+    '..........---..VV..........VV.....',
+    '####..........VV.......##..####...',
+    '####.SSS..SSS.....SSS.###.####...',
+    '####.SSS..SSS..SS.SSS.#########..',
+  ], [
+    e(IM, 5, 1), e(FE, 14, 1), e(PS, 20, 3), e(PY, 28, 2),
+    e(IM, 24, 1), e(SM, 10, 4),
+  ]);
+
+  // Section 4: Descent into Inferno (20x16)
+  const s4 = section([
+    '####################',
+    '#..................#',
+    '#.---..............#',
+    '#..........---.....#',
+    '#.....VV...........#',
+    '#.....VV.---..VV...#',
+    '#..---.......-VV-..#',
+    '#..................#',
+    '#........---...VV..#',
+    '#..VV..........VV..#',
+    '#..VV..---....--...#',
+    '#..................#',
+    '#.......---........#',
+    '#.---..............#',
+    '#...........---....#',
+    '####################',
+  ], [
+    e(PY, 8, 3), e(IM, 14, 1), e(FE, 5, 6), e(PS, 12, 8),
+    e(SM, 8, 11), e(IM, 15, 13), e(PS, 4, 13),
+  ]);
+
+  // Section 5: Demon's Chamber
+  const s5 = bossRoom(18, 11);
+
+  return [s1, s2, s3, s4, s5];
 }
 
-function createSection1(enemies: EnemyType[]): LevelSection {
-  // W=30 H=9 tiles (960x288 pixels)
-  const W = 30, H = 9;
-  const tiles: number[][] = [];
+// ════════════════════════════════════════════════════════════════════
+// STAGE 3: HAUNTED GRAVEYARD  (Headless Horseman)
+// Theme: Dark graveyard, crypts, undead, breakable tombstones
+// ════════════════════════════════════════════════════════════════════
 
-  for (let r = 0; r < H; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < W; c++) {
-      if (r >= H - 2) {
-        row.push(T.SOLID);
-      } else if (r === H - 3 && (c === 10 || c === 11)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 4 && (c === 18 || c === 19)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 3 && c === 24) {
-        row.push(T.PLATFORM);
+function generateHauntedGraveyard(): LevelSection[] {
+  const WW = EnemyType.WEREWOLF;
+  const GA = EnemyType.GARGOYLE;
+  const SK = EnemyType.SKELETON_WARRIOR;
+  const GB = EnemyType.GOBLIN;
+  const HA = EnemyType.HARPY;
+
+  // Section 1: Graveyard Entrance (32x10) - tombstone platforms
+  const s1 = section([
+    '................................',
+    '.....................#..........',
+    '..@...........B......#.........',
+    '..##..B..B...BB..B...##..BB....',
+    '..##..#..#...##..#...##..##....',
+    '..##..#..#...##..#...##..##..##',
+    '..##..#..#...##..#...##..##..##',
+    '..##############..############.',
+    '..##############..############.',
+    '################################',
+  ], [
+    e(SK, 7, 6), e(GB, 14, 6), e(SK, 21, 4), e(GA, 27, 2),
+    e(GB, 10, 6),
+  ]);
+
+  // Section 2: Crypt Descent (20x16) - going down underground
+  const s2 = section([
+    '####################',
+    '#..................#',
+    '#..---........---..#',
+    '#..................#',
+    '#......BB..BB......#',
+    '#......##..##......#',
+    '#.---..##..##.---..#',
+    '#......##..##......#',
+    '#.........SS.......#',
+    '#..---........---..#',
+    '#..................#',
+    '#......BB..........#',
+    '#......##...---....#',
+    '#..---..........BB.#',
+    '#.............####.#',
+    '####################',
+  ], [
+    e(SK, 5, 2), e(GA, 14, 1), e(WW, 10, 6), e(GB, 5, 9),
+    e(SK, 14, 11), e(HA, 8, 4), e(GB, 15, 13),
+  ]);
+
+  // Section 3: Underground Tunnels (35x10)
+  const s3 = section([
+    '###################################',
+    '#.................................#',
+    '#.........BB........BB...........#',
+    '#..---....##..---...##....---.BB.#',
+    '#.........##........##.......####.',
+    '#.##..............##.........###..',
+    '#.##..BB....---...##....---..##...',
+    '#.####.##.........##..........#...',
+    '#.####.##.SSS..########.SSS..#...',
+    '###################################',
+  ], [
+    e(WW, 6, 5), e(SK, 12, 3), e(GA, 18, 1), e(GB, 24, 3),
+    e(SK, 30, 3), e(WW, 16, 6), e(HA, 26, 1),
+  ]);
+
+  // Section 4: Cemetery Chase (35x10) - wide open, many enemies
+  const s4 = section([
+    '...................................',
+    '...................................',
+    '...................................',
+    '..........---......---.............',
+    '...............................BB..',
+    '..---..................---..BB.##..',
+    '.......BB..BB.....BB........####..',
+    '.......##..##..BB.##...##..#####..',
+    '###.SS.########.#.###.###.######..',
+    '###################################',
+  ], [
+    e(WW, 5, 7), e(SK, 10, 6), e(GB, 15, 7), e(GA, 20, 2),
+    e(HA, 25, 1), e(WW, 28, 6), e(SK, 32, 6), e(GB, 8, 7),
+  ]);
+
+  // Section 5: Mausoleum (boss)
+  const s5 = bossRoom(18, 11);
+
+  return [s1, s2, s3, s4, s5];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// STAGE 4: WITCH'S TOWER  (Witch)
+// Theme: Magical tower, vertical climb, alchemy, vine barriers
+// ════════════════════════════════════════════════════════════════════
+
+function generateWitchTower(): LevelSection[] {
+  const WZ = EnemyType.WIZARD;
+  const MC = EnemyType.MIMIC_CHEST;
+  const PS = EnemyType.POISON_SKULL;
+  const FE = EnemyType.FLYING_EYE;
+  const BD = EnemyType.BABY_DRAGON;
+
+  // Section 1: Tower Base (28x10)
+  const s1 = section([
+    '............................',
+    '#.........................##',
+    '#..@.............VV.....###',
+    '#..##....---..VV.VV...####',
+    '#..##........VVV.....#####',
+    '#..##..---........---..####',
+    '#..###........---.....####.',
+    '#..####..##........########',
+    '#..####..###..SSS..########',
+    '############################',
+  ], [
+    e(WZ, 8, 5), e(PS, 14, 3), e(MC, 20, 6), e(FE, 24, 1),
+  ]);
+
+  // Section 2: Alchemy Library (25x14) - vine barriers, puzzles
+  const s2 = section([
+    '#########################',
+    '#.......................#',
+    '#..VV..---..........VV.#',
+    '#..VV...........---..V.#',
+    '#..VV.....VV.........V.#',
+    '#.........VV..---....V.#',
+    '#..---....VV.........V.#',
+    '#.................---..#',
+    '#.........---..........#',
+    '#..VV..................#',
+    '#..VV..---....---..VV..#',
+    '#..VV..............VV..#',
+    '#..##..####..####..##..#',
+    '#########################',
+  ], [
+    e(WZ, 7, 6), e(MC, 15, 8), e(PS, 11, 2), e(FE, 20, 4),
+    e(BD, 5, 10), e(WZ, 18, 10), e(PS, 13, 5),
+  ]);
+
+  // Section 3: Tower Ascent (16x22) - tall vertical climb
+  const s3 = section([
+    '################',
+    '#..............#',
+    '#...---........#',
+    '#..............#',
+    '#........---...#',
+    '#..VV..........#',
+    '#..VV..---..VV.#',
+    '#..VV.......VV.#',
+    '#...........VV.#',
+    '#.---..........#',
+    '#..............#',
+    '#.......---....#',
+    '#..............#',
+    '#..---..VV.....#',
+    '#.......VV.---.#',
+    '#.......VV.....#',
+    '#..............#',
+    '#....---..VV...#',
+    '#.........VV...#',
+    '#..---....VV...#',
+    '#..............#',
+    '################',
+  ], [
+    e(FE, 10, 2), e(WZ, 5, 5), e(PS, 12, 8), e(BD, 8, 11),
+    e(FE, 4, 14), e(WZ, 11, 17), e(PS, 7, 19),
+  ]);
+
+  // Section 4: Rooftop (30x10)
+  const s4 = section([
+    '..............................',
+    '..............................',
+    '..............---.............',
+    '.....---..................---.',
+    '..............VV..............',
+    '.........---..VV..---........',
+    '..VV..........VV.........VV..',
+    '##VV..##..SSS..........##VV##',
+    '####..###.....####..#####.###',
+    '##############################',
+  ], [
+    e(BD, 5, 4), e(FE, 12, 1), e(WZ, 18, 4), e(PS, 24, 3),
+    e(BD, 8, 1), e(MC, 22, 8),
+  ]);
+
+  // Section 5: Witch's Sanctum (boss)
+  const s5 = bossRoom(18, 11);
+
+  return [s1, s2, s3, s4, s5];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// STAGE 5: BEAST'S DEN  (Cerberus)
+// Theme: Wild caves, forest, rocky terrain, breakable walls
+// ════════════════════════════════════════════════════════════════════
+
+function generateBeastDen(): LevelSection[] {
+  const KW = EnemyType.KOBOLD_WARRIOR;
+  const LZ = EnemyType.LIZARDMAN;
+  const SA = EnemyType.SATYR_ARCHER;
+  const GR = EnemyType.GRYPHON;
+  const WW = EnemyType.WEREWOLF;
+
+  // Section 1: Forest Approach (32x10)
+  const s1 = section([
+    '................................',
+    '...#..........#.........#.......',
+    '..##.........###.......###......',
+    '..@..........###.......###......',
+    '..##...---.........---..........',
+    '..##.......................---...',
+    '..##..........---...........BB..',
+    '..###....##..........##..BB.##..',
+    '..####..####.SSS..#####..######.',
+    '################################',
+  ], [
+    e(KW, 8, 7), e(LZ, 14, 7), e(SA, 20, 4), e(KW, 26, 6),
+    e(GR, 18, 1),
+  ]);
+
+  // Section 2: Cave Entrance (30x12) - transition from forest to cave
+  const s2 = section([
+    '###...........................',
+    '####..........##..............',
+    '#####........####.........####',
+    '######..---..####...---..####.',
+    '#................#.......###..',
+    '#..---...........#.......##...',
+    '#....BB..........#..BB...#....',
+    '#....##..---..BB.#..##..##....',
+    '###..####.....##.#..##..###...',
+    '###..####.SSS.#####..##.####..',
+    '###..###########..########....',
+    '##############################',
+  ], [
+    e(KW, 5, 4), e(LZ, 12, 4), e(WW, 18, 3), e(SA, 24, 3),
+    e(KW, 8, 7), e(GR, 22, 0),
+  ]);
+
+  // Section 3: Underground River (35x10) - gaps over spikes
+  const s3 = section([
+    '###################################',
+    '#.................................#',
+    '#..---........BB.........---..BB.#',
+    '#.............##.............####.#',
+    '#......---....##..---........##..#',
+    '##...........BB............---.#.#',
+    '##..BB........#....BB........###.#',
+    '####.##..##...##...##..##..####..#',
+    '####.##..##.SS.##.SS##.##.#####.#',
+    '###################################',
+  ], [
+    e(LZ, 6, 4), e(WW, 13, 2), e(SA, 19, 4), e(KW, 25, 2),
+    e(LZ, 30, 2), e(GR, 10, 1), e(KW, 22, 6),
+  ]);
+
+  // Section 4: Deep Cave (22x14) - breakable walls everywhere
+  const s4 = section([
+    '######################',
+    '#....................#',
+    '#..---..BB..........##',
+    '#.......##...---..BB##',
+    '#.......##.......####.',
+    '#..BB..---..BB.......#',
+    '#..##.......##..---..#',
+    '#..##...---..........#',
+    '#............BB..BB..#',
+    '#..---...##..##..##..#',
+    '#.........#..........#',
+    '#..BB..---...---..BB.#',
+    '#..##............####.',
+    '######################',
+  ], [
+    e(WW, 5, 4), e(KW, 11, 2), e(SA, 16, 3), e(LZ, 8, 7),
+    e(WW, 14, 9), e(KW, 18, 11), e(GR, 6, 1),
+  ]);
+
+  // Section 5: The Den (boss)
+  const s5 = bossRoom(20, 11);
+
+  return [s1, s2, s3, s4, s5];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// STAGE 6: MEDUSA'S LAIR  (Medusa)
+// Theme: Ancient Greek temple ruins, columns, breakable statues
+// ════════════════════════════════════════════════════════════════════
+
+function generateMedusaLair(): LevelSection[] {
+  const SG = EnemyType.STONE_GOLEM;
+  const CY = EnemyType.CYCLOPS;
+  const HA = EnemyType.HARPY;
+  const GA = EnemyType.GARGOYLE;
+  const LZ = EnemyType.LIZARDMAN;
+
+  // Section 1: Temple Entrance (32x10) - columned hall
+  const s1 = section([
+    '................................',
+    '..####..####..####..####..####..',
+    '..@.#....#....#....#....#......',
+    '..###....#....#....#....#...---',
+    '..###....#....#....#....#......',
+    '..##.....#....#....#....#...---',
+    '..##.....#....#....#....#......',
+    '..##..BB.#.BB.#.BB.#....#..####',
+    '..##..########.#########..####.',
+    '################################',
+  ], [
+    e(LZ, 8, 6), e(GA, 13, 1), e(SG, 18, 6), e(LZ, 24, 4),
+    e(HA, 28, 1),
+  ]);
+
+  // Section 2: Ruined Halls (30x12) - crumbling architecture
+  const s2 = section([
+    '##............................',
+    '##..........##............####',
+    '##..........##............####',
+    '##..---..BB.##..---......####',
+    '#........##..........BB..##..',
+    '#...............---..##..#...',
+    '#..BB..---..............##...',
+    '#..##..........BB..---..#....',
+    '####..##..BB...##.......##...',
+    '####..##..##..###.SSS.####...',
+    '####..##..#########..######..',
+    '##############################',
+  ], [
+    e(SG, 5, 4), e(CY, 12, 3), e(GA, 18, 1), e(LZ, 24, 3),
+    e(HA, 8, 1), e(LZ, 28, 6), e(GA, 15, 5),
+  ]);
+
+  // Section 3: Statue Gallery (30x10) - many breakable blocks
+  const s3 = section([
+    '##############################',
+    '#............................#',
+    '#..BB..BB..BB..BB..BB..BB...#',
+    '#..##..##..##..##..##..##.--#',
+    '#..............BB............#',
+    '#..---..BB.....##....BB.---..#',
+    '#.......##...........##.....#',
+    '#.......##..---..BB..##..BB.#',
+    '#..BB..####......##..##..##.#',
+    '##############################',
+  ], [
+    e(SG, 5, 4), e(CY, 11, 4), e(GA, 17, 1), e(LZ, 23, 4),
+    e(HA, 14, 1), e(SG, 26, 6), e(LZ, 8, 6),
+  ]);
+
+  // Section 4: Snake Passage (22x14) - winding descent
+  const s4 = section([
+    '######################',
+    '#....................#',
+    '#..---....BB.........#',
+    '#.........##...---...#',
+    '#...............BB...#',
+    '#..BB..---...#.##....#',
+    '#..##........#.......#',
+    '#..##...---..#..BB...#',
+    '#............#..##...#',
+    '#..---..BB...#..---..#',
+    '#.......##...........#',
+    '#............---..BB.#',
+    '#..BB..---........##.#',
+    '######################',
+  ], [
+    e(SG, 5, 4), e(CY, 12, 2), e(GA, 16, 1), e(LZ, 8, 8),
+    e(HA, 14, 5), e(LZ, 18, 11), e(SG, 6, 10),
+  ]);
+
+  // Section 5: Medusa's Throne (boss)
+  const s5 = bossRoom(18, 11);
+
+  return [s1, s2, s3, s4, s5];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// STAGE 7: DRAGON'S SUMMIT  (Dragon - Final Boss)
+// Theme: Mountain/volcano peak, hardest level, both barriers
+// ════════════════════════════════════════════════════════════════════
+
+function generateDragonSummit(): LevelSection[] {
+  const MT = EnemyType.MINOTAUR;
+  const PY = EnemyType.PYROMANCER;
+  const BD = EnemyType.BABY_DRAGON;
+  const MO = EnemyType.MASKED_ORC;
+  const SG = EnemyType.STONE_GOLEM;
+
+  // Section 1: Mountain Base (32x12) - steep rocky terrain
+  const s1 = section([
+    '................................',
+    '................................',
+    '..@.........................####',
+    '..##....---..............######.',
+    '..##..............---..########.',
+    '..###..BB..---........########..',
+    '..###..##.........VV..######...',
+    '..####.##..##..BB.VV..#####....',
+    '..####.######..##.....####.....',
+    '..####.######..###.SS.####.....',
+    '..####.######..###.########....',
+    '################################',
+  ], [
+    e(MO, 7, 5), e(MT, 13, 5), e(PY, 19, 4), e(BD, 25, 1),
+    e(SG, 22, 5),
+  ]);
+
+  // Section 2: Cliffside Path (35x12) - narrow platforms, both barriers
+  const s2 = section([
+    '...................................',
+    '#.........#........................',
+    '#.........#.....VV.............###',
+    '#..---....#.VV..VV..BB........###',
+    '#.........#.VV......##...---..##.',
+    '#.....BB..#.VV.---..........BB#..',
+    '#.....##..#..............---..##..',
+    '##........#..BB...VV.........##..',
+    '##..SSS..###.##...VV..##..####..',
+    '##.......####.##..VV..##..####..',
+    '##.......####.########.########..',
+    '###################################',
+  ], [
+    e(BD, 6, 3), e(MT, 14, 3), e(PY, 20, 4), e(MO, 26, 4),
+    e(SG, 30, 4), e(BD, 10, 1), e(MT, 24, 6),
+  ]);
+
+  // Section 3: Volcano Interior (25x16) - both vines and breakable
+  const s3 = section([
+    '#########################',
+    '#.......................#',
+    '#..---....VV.......BB..#',
+    '#.........VV.......##..#',
+    '#..BB.....VV..---......#',
+    '#..##..---............BB#',
+    '#..##..........VV...####',
+    '#..........---..VV.....#',
+    '#...VV.........VV..BB..#',
+    '#...VV..BB.---..VV.##..#',
+    '#...VV..##..........VV.#',
+    '#.......##...---....VV.#',
+    '#..BB..---..........VV.#',
+    '#..##..........---..VV.#',
+    '#..##..............BB..#',
+    '#########################',
+  ], [
+    e(PY, 5, 4), e(BD, 12, 1), e(MT, 18, 2), e(SG, 8, 7),
+    e(MO, 15, 9), e(BD, 20, 6), e(PY, 10, 12), e(MT, 16, 13),
+  ]);
+
+  // Section 4: Summit Gauntlet (35x10) - final enemy rush
+  const s4 = section([
+    '...................................',
+    '#.................................#',
+    '#..........VV...BB........VV..BB.#',
+    '#..---..VV.VV...##..---..VV..##.#',
+    '#.......VV.VV............VV.....#',
+    '#..BB......VV...BB..---..VV..BB.#',
+    '#..##..---....BB.##.........####.',
+    '####........BB##.##..BB..######..',
+    '####.SS..SS.####.##..##.#######..',
+    '###################################',
+  ], [
+    e(MT, 5, 5), e(SG, 10, 5), e(PY, 15, 3), e(BD, 20, 1),
+    e(MO, 24, 3), e(MT, 28, 3), e(SG, 32, 5), e(BD, 8, 1),
+  ]);
+
+  // Section 5: Dragon's Peak (larger boss room)
+  const s5 = bossRoom(22, 13);
+
+  return [s1, s2, s3, s4, s5];
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Boss Room Generator (shared, configurable size)
+// ════════════════════════════════════════════════════════════════════
+
+function bossRoom(width: number, height: number): LevelSection {
+  const lines: string[] = [];
+
+  for (let r = 0; r < height; r++) {
+    let line = '';
+    for (let c = 0; c < width; c++) {
+      if (r === 0 || r >= height - 2) {
+        line += '#';  // ceiling and floor
+      } else if (c === 0 || c === width - 1) {
+        line += '#';  // walls
+      } else if (r === 2 && c === 2) {
+        line += '@';  // player spawn
+      } else if (r === height - 4 && c === width - 3) {
+        line += 'X';  // boss spawn (high enough to not clip floor)
       } else {
-        row.push(T.EMPTY);
+        line += '.';
       }
     }
-    tiles.push(row);
+    lines.push(line);
   }
 
-  // Place spawn
-  tiles[H - 3][1] = T.PLAYER_SPAWN;
-
-  const spawns: EnemySpawn[] = [];
-  if (enemies.length > 0) {
-    spawns.push({ type: enemies[0], col: 8, row: H - 3 });
-    spawns.push({ type: enemies[0], col: 15, row: H - 3 });
-    if (enemies.length > 1) {
-      spawns.push({ type: enemies[1], col: 22, row: H - 3 });
-    }
-  }
-
-  return { tiles, enemies: spawns };
+  return section(lines, [], true);
 }
 
-function createSection2(enemies: EnemyType[], stageId: StageId): LevelSection {
-  const W = 30, H = 12;
-  const tiles: number[][] = [];
-
-  for (let r = 0; r < H; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < W; c++) {
-      if (r >= H - 1) {
-        // Bottomless pit with islands
-        if ((c >= 0 && c <= 3) || (c >= 8 && c <= 11) || (c >= 16 && c <= 19) || (c >= 24 && c <= 29)) {
-          row.push(T.SOLID);
-        } else {
-          row.push(T.SPIKE);
-        }
-      } else if (r === H - 2 && ((c >= 0 && c <= 3) || (c >= 8 && c <= 11) || (c >= 16 && c <= 19) || (c >= 24 && c <= 29))) {
-        row.push(T.SOLID);
-      } else if (r === H - 5 && (c === 6 || c === 7)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 5 && (c === 13 || c === 14)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 4 && (c === 20 || c === 21)) {
-        row.push(T.PLATFORM);
-      } else if (r === 3 && c >= 12 && c <= 14) {
-        // High platform for vertical element
-        row.push(T.PLATFORM);
-      } else {
-        row.push(T.EMPTY);
-      }
-    }
-    tiles.push(row);
-  }
-
-  const spawns: EnemySpawn[] = [];
-  if (enemies.length > 0) {
-    spawns.push({ type: enemies[0], col: 10, row: H - 3 });
-    spawns.push({ type: pick(enemies), col: 18, row: H - 3 });
-    spawns.push({ type: pick(enemies), col: 26, row: H - 3 });
-  }
-
-  return { tiles, enemies: spawns };
-}
-
-function createSection3(enemies: EnemyType[], stageId: StageId): LevelSection {
-  const W = 35, H = 10;
-  const tiles: number[][] = [];
-  const hasVines = stageId === StageId.DEMON_BOSS || stageId === StageId.WITCH || stageId === StageId.DRAGON;
-  const hasBreakable = stageId === StageId.HUGE_KNIGHT || stageId === StageId.HEADLESS_HORSEMAN ||
-                       stageId === StageId.CERBERUS || stageId === StageId.MEDUSA || stageId === StageId.DRAGON;
-
-  for (let r = 0; r < H; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < W; c++) {
-      if (r >= H - 2) {
-        row.push(T.SOLID);
-      } else if (r >= 2 && r <= 4 && c === 15) {
-        // Barrier
-        row.push(hasVines ? T.VINE : (hasBreakable ? T.BREAKABLE : T.SOLID));
-      } else if (r === H - 4 && (c >= 5 && c <= 7)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 5 && (c >= 20 && c <= 22)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 4 && (c >= 28 && c <= 30)) {
-        row.push(T.PLATFORM);
-      } else if (r === 2 && c >= 22 && c <= 24) {
-        row.push(T.PLATFORM);
-      } else {
-        row.push(T.EMPTY);
-      }
-    }
-    tiles.push(row);
-  }
-
-  const spawns: EnemySpawn[] = [];
-  if (enemies.length >= 3) {
-    spawns.push({ type: enemies[0], col: 6, row: H - 3 });
-    spawns.push({ type: enemies[1], col: 12, row: H - 3 });
-    spawns.push({ type: enemies[2], col: 20, row: H - 3 });
-    spawns.push({ type: enemies[0], col: 26, row: H - 3 });
-    spawns.push({ type: pick(enemies), col: 32, row: H - 3 });
-  }
-
-  return { tiles, enemies: spawns };
-}
-
-function createSection4(enemies: EnemyType[], stageId: StageId): LevelSection {
-  // Taller section for vertical challenge
-  const W = 20, H = 16;
-  const tiles: number[][] = [];
-
-  for (let r = 0; r < H; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < W; c++) {
-      // Walls on sides
-      if (c === 0 || c === W - 1) {
-        row.push(T.SOLID);
-      }
-      // Ground at bottom
-      else if (r >= H - 2) {
-        row.push(T.SOLID);
-      }
-      // Ascending platforms (zigzag pattern)
-      else if (r === H - 4 && (c >= 2 && c <= 5)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 6 && (c >= 10 && c <= 14)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 8 && (c >= 3 && c <= 6)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 10 && (c >= 11 && c <= 15)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 12 && (c >= 4 && c <= 8)) {
-        row.push(T.PLATFORM);
-      } else if (r === H - 14 && (c >= 10 && c <= 16)) {
-        row.push(T.SOLID); // Exit platform at top
-      } else {
-        row.push(T.EMPTY);
-      }
-    }
-    tiles.push(row);
-  }
-
-  const spawns: EnemySpawn[] = [];
-  if (enemies.length >= 2) {
-    spawns.push({ type: enemies[0], col: 4, row: H - 3 });
-    spawns.push({ type: pick(enemies), col: 12, row: H - 7 });
-    spawns.push({ type: pick(enemies), col: 5, row: H - 9 });
-    if (enemies.length >= 4) {
-      spawns.push({ type: enemies[3], col: 13, row: H - 11 });
-    }
-  }
-
-  return { tiles, enemies: spawns };
-}
-
-function createBossRoom(): LevelSection {
-  const W = 16, H = 9;
-  const tiles: number[][] = [];
-
-  for (let r = 0; r < H; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < W; c++) {
-      if (r >= H - 2) {
-        row.push(T.SOLID); // Floor
-      } else if (r === 0) {
-        row.push(T.SOLID); // Ceiling
-      } else if (c === 0 || c === W - 1) {
-        row.push(T.SOLID); // Walls
-      } else if (r === 1 && c === 1) {
-        row.push(T.PLAYER_SPAWN);
-      } else {
-        row.push(T.EMPTY);
-      }
-    }
-    tiles.push(row);
-  }
-
-  // Boss spawn at far side (row H-4 so tall bosses don't clip into floor)
-  tiles[H - 4][W - 3] = T.BOSS_SPAWN;
-
-  return { tiles, enemies: [], isBossRoom: true };
-}
+// ── Utility exports ────────────────────────────────────────────────
 
 export function getSectionWorldOffset(sections: LevelSection[], sectionIndex: number): { x: number; y: number } {
   let offsetX = 0;
