@@ -15,6 +15,10 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 96,
     });
+    this.load.spritesheet('player_run_sheet', 'assets/player_run.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
   }
 
   create(): void {
@@ -307,6 +311,16 @@ export class BootScene extends Phaser.Scene {
       // Generate 6-frame idle animation procedurally
       // Ninja character with purple hair, dark outfit, subtle bob
       this.generateProceduralIdleFrames();
+    }
+
+    // Run animation
+    if (this.textures.exists('player_run_sheet')) {
+      this.anims.create({
+        key: 'player_run',
+        frames: this.anims.generateFrameNumbers('player_run_sheet', { start: 0, end: 7 }),
+        frameRate: 12,
+        repeat: -1,
+      });
     }
   }
 

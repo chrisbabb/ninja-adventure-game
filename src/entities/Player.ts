@@ -606,17 +606,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private updateAnimation(): void {
-    const hasAnims = this.scene.anims.exists('player_idle');
-    if (!hasAnims) return;
-
     switch (this.state) {
       case PlayerState.IDLE:
-        this.play('player_idle', true);
-        this.clearTint();
+        if (this.scene.anims.exists('player_idle')) {
+          this.play('player_idle', true);
+          this.clearTint();
+        }
+        break;
+      case PlayerState.RUN:
+        if (this.scene.anims.exists('player_run')) {
+          this.play('player_run', true);
+          this.clearTint();
+        }
         break;
       default:
         // Stop animation for states without sprite sheets yet
-        // Fall back to procedural tint-based visuals
         this.stop();
         this.setTint(this.formSystem.getCurrentStats().color);
         break;
