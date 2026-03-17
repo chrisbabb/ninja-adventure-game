@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SCENE_KEYS, StageId, BossType, Difficulty } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT, STAGE_CONFIGS, BOSS_CONFIGS } from '../constants';
 import { SaveSystem } from '../systems/SaveSystem';
+import { attachGamepadMenu } from '../utils/GamepadMenu';
 
 interface StageOption {
   stageId: StageId;
@@ -144,6 +145,15 @@ export class StageSelectScene extends Phaser.Scene {
         this.scene.start(SCENE_KEYS.MAIN_MENU);
       });
     }
+
+    attachGamepadMenu(this, {
+      onUp: () => this.moveSelection(0, -1),
+      onDown: () => this.moveSelection(0, 1),
+      onLeft: () => this.moveSelection(-1, 0),
+      onRight: () => this.moveSelection(1, 0),
+      onConfirm: () => this.selectStage(),
+      onBack: () => this.scene.start(SCENE_KEYS.MAIN_MENU),
+    });
   }
 
   private moveSelection(dx: number, dy: number): void {

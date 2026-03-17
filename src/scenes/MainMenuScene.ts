@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SCENE_KEYS, Difficulty } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT } from '../constants';
 import { SaveSystem } from '../systems/SaveSystem';
+import { attachGamepadMenu } from '../utils/GamepadMenu';
 
 export class MainMenuScene extends Phaser.Scene {
   private selectedIndex: number = 0;
@@ -95,6 +96,20 @@ export class MainMenuScene extends Phaser.Scene {
         if (this.selectedIndex === 1) this.cycleDifficulty(1);
       });
     }
+
+    attachGamepadMenu(this, {
+      onUp: () => {
+        this.selectedIndex = (this.selectedIndex - 1 + this.menuItems.length) % this.menuItems.length;
+        this.updateSelection();
+      },
+      onDown: () => {
+        this.selectedIndex = (this.selectedIndex + 1) % this.menuItems.length;
+        this.updateSelection();
+      },
+      onLeft: () => { if (this.selectedIndex === 1) this.cycleDifficulty(-1); },
+      onRight: () => { if (this.selectedIndex === 1) this.cycleDifficulty(1); },
+      onConfirm: () => this.selectItem(),
+    });
 
     // Decorative ninja stars
     for (let i = 0; i < 20; i++) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS, StageId, FormType } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT, FORM_NAMES, FORM_STATS } from '../constants';
+import { attachGamepadMenu } from '../utils/GamepadMenu';
 
 export class VictoryScene extends Phaser.Scene {
   private stageId!: StageId;
@@ -114,6 +115,18 @@ export class VictoryScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-ENTER', () => this.selectItem());
       this.input.keyboard.on('keydown-SPACE', () => this.selectItem());
     }
+
+    attachGamepadMenu(this, {
+      onUp: () => {
+        this.selectedIndex = (this.selectedIndex - 1 + items.length) % items.length;
+        this.updateSelection();
+      },
+      onDown: () => {
+        this.selectedIndex = (this.selectedIndex + 1) % items.length;
+        this.updateSelection();
+      },
+      onConfirm: () => this.selectItem(),
+    });
   }
 
   private checkMasterUnlock(): boolean {

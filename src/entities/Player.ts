@@ -77,6 +77,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private specialKey!: Phaser.Input.Keyboard.Key;
   private dashKey!: Phaser.Input.Keyboard.Key;
 
+  // Gamepad button "just pressed" tracking (indexed by button number)
+  private padPrev: boolean[] = new Array(16).fill(false);
+  private static readonly PAD_JUMP = 0;       // A
+  private static readonly PAD_ATTACK = 2;     // X
+  private static readonly PAD_SPECIAL = 3;    // Y
+  private static readonly PAD_DASH = 5;       // RB
+  private static readonly STICK_DEADZONE = 0.3;
+
   // Callbacks
   onDeath: (() => void) | null = null;
   onHealthChange: ((health: number, maxHealth: number) => void) | null = null;
@@ -144,6 +152,60 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
   }
 
+  private getPad(): Phaser.Input.Gamepad.Gamepad | null {
+    return this.scene.input.gamepad?.pad1 ?? null;
+  }
+
+  private padButton(index: number): boolean {
+    return this.getPad()?.buttons[index]?.pressed ?? false;
+  }
+
+  private padJustDown(index: number): boolean {
+    return this.padButton(index) && !this.padPrev[index];
+  }
+
+  private padAxisX(): number {
+    const pad = this.getPad();
+    if (!pad) return 0;
+    // Left stick X axis, or D-pad
+    const stickX = pad.axes.length > 0 ? pad.axes[0].getValue() : 0;
+    if (Math.abs(stickX) > Player.STICK_DEADZONE) return stickX;
+    // D-pad: left=14, right=15
+    if (pad.buttons[14]?.pressed) return -1;
+    if (pad.buttons[15]?.pressed) return 1;
+    return 0;
+  }
+
+  private padAxisY(): number {
+    const pad = this.getPad();
+    if (!pad) return 0;
+    const stickY = pad.axes.length > 1 ? pad.axes[1].getValue() : 0;
+    if (Math.abs(stickY) > Player.STICK_DEADZONE) return stickY;
+    // D-pad: up=12, down=13
+    if (pad.buttons[12]?.pressed) return -1;
+    if (pad.buttons[13]?.pressed) return 1;
+    return 0;
+  }
+
+  private updatePadPrev(): void {
+    const pad = this.getPad();
+    for (let i = 0; i < this.padPrev.length; i++) {
+      this.padPrev[i] = pad?.buttons[i]?.pressed ?? false;
+    }
+  }
+
+  private isLeft(): boolean {
+    return this.cursors?.left?.isDown || this.padAxisX() < -Player.STICK_DEADZONE;
+  }
+
+  private isRight(): boolean {
+    return this.cursors?.right?.isDown || this.padAxisX() > Player.STICK_DEADZONE;
+  }
+
+  private isUp(): boolean {
+    return this.cursors?.up?.isDown || this.padAxisY() < -Player.STICK_DEADZONE;
+  }
+
   applyFormStats(): void {
     const stats = this.formSystem.getCurrentStats();
     this.maxHealth = stats.maxHealth;
@@ -184,7 +246,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.jumpsRemaining = stats.maxJumps;
       this.coyoteTimer = COYOTE_TIME;
       this.wallJumpLockTimer = 0;
-      this.fastRunning = this.fastRunning && (this.cursors.left.isDown || this.cursors.right.isDown);
+      this.fastRunning = this.fastRunning && (this.isLeft() || this.isRight());
     } else {
       this.coyoteTimer = Math.max(0, this.coyoteTimer - delta);
     }
@@ -232,10 +294,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
 
       let moveX = 0;
-      if (this.cursors.left.isDown) {
+      if (this.isLeft()) {
         moveX = -moveSpeed;
         this.facingRight = false;
-      } else if (this.cursors.right.isDown) {
+      } else if (this.isRight()) {
         moveX = moveSpeed;
         this.facingRight = true;
       }
@@ -247,7 +309,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // ── Wall Slide ──
     this.wallSlideDir = 0;
     if (!this.isGrounded && this.wallJumpLockTimer <= 0 &&
-        ((body.blocked.left && this.cursors.left.isDown) || (body.blocked.right && this.cursors.right.isDown))) {
+        ((body.blocked.left && this.isLeft()) || (body.blocked.right && this.isRight()))) {
       this.wallSlideDir = body.blocked.left ? -1 : 1;
       if (body.velocity.y > 50) {
         body.setVelocityY(50); // Slow fall
@@ -258,7 +320,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // ── Jump ──
     this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - delta);
 
-    const jumpJustPressed = Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up);
+    const jumpJustPressed = Phaser.Input.Keyboard.JustDown(this.jumpKey) || Phaser.Input.Keyboard.JustDown(this.cursors.up) || this.padJustDown(Player.PAD_JUMP);
     if (jumpJustPressed) {
       this.jumpBufferTimer = JUMP_BUFFER_TIME;
     }
@@ -298,19 +360,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && !this.isAttacking) {
+    if ((Phaser.Input.Keyboard.JustDown(this.attackKey) || this.padJustDown(Player.PAD_ATTACK)) && !this.isAttacking) {
       this.performAttack(stats);
     }
 
     // ── Special / Dash ──
     if (!this.isAttacking) {
-      if (Phaser.Input.Keyboard.JustDown(this.dashKey) && this.dashCooldown <= 0) {
+      if ((Phaser.Input.Keyboard.JustDown(this.dashKey) || this.padJustDown(Player.PAD_DASH)) && this.dashCooldown <= 0) {
         if (stats.specialAbility === SpecialAbility.SHURIKEN_DASH || stats.specialAbility === SpecialAbility.MASTER_ALL) {
           this.performDash();
         }
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.specialKey)) {
+      if (Phaser.Input.Keyboard.JustDown(this.specialKey) || this.padJustDown(Player.PAD_SPECIAL)) {
         this.performSpecial(stats);
       }
     }
@@ -344,6 +406,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.y > this.scene.physics.world.bounds.height + 100) {
       this.die();
     }
+
+    // Track gamepad button states for "just pressed" detection
+    this.updatePadPrev();
   }
 
   private performJump(stats: ReturnType<typeof this.formSystem.getCurrentStats>): void {
@@ -522,8 +587,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private detectDoubleTap(time: number): void {
-    const leftJustDown = this.cursors.left.isDown && !this.prevLeft;
-    const rightJustDown = this.cursors.right.isDown && !this.prevRight;
+    const left = this.isLeft();
+    const right = this.isRight();
+    const leftJustDown = left && !this.prevLeft;
+    const rightJustDown = right && !this.prevRight;
 
     if (leftJustDown) {
       if (time - this.lastLeftTap < DOUBLE_TAP_WINDOW) {
@@ -540,12 +607,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     // Stop fast running if direction changes or stops
-    if (!this.cursors.left.isDown && !this.cursors.right.isDown) {
+    if (!left && !right) {
       this.fastRunning = false;
     }
 
-    this.prevLeft = this.cursors.left.isDown;
-    this.prevRight = this.cursors.right.isDown;
+    this.prevLeft = left;
+    this.prevRight = right;
   }
 
   private updateHurt(delta: number): void {

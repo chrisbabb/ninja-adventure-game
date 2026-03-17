@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT } from '../constants';
+import { attachGamepadMenu } from '../utils/GamepadMenu';
 
 interface SettingItem {
   label: string;
@@ -82,13 +83,14 @@ export class SettingsScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const controls = [
-      'Arrow Keys  -  Move',
-      'Space / Up  -  Jump',
-      'Z           -  Attack',
-      'X           -  Special',
-      'C           -  Dash',
-      'ESC         -  Pause',
-      'TAB         -  Form Menu',
+      'Arrows / L-Stick  -  Move',
+      'Space / A btn     -  Jump',
+      'Z / X btn         -  Attack',
+      'X / Y btn         -  Special',
+      'C / RB            -  Dash',
+      'ESC / Start       -  Pause',
+      'Q / LB            -  Cycle Form',
+      'TAB / Select      -  Form Menu',
     ];
     controls.forEach((ctrl, i) => {
       this.add.text(GAME_WIDTH / 2, ctrlY + 18 + i * 14, ctrl, {
@@ -123,6 +125,20 @@ export class SettingsScene extends Phaser.Scene {
         this.scene.start(SCENE_KEYS.MAIN_MENU);
       });
     }
+
+    attachGamepadMenu(this, {
+      onUp: () => {
+        this.selectedIndex = (this.selectedIndex - 1 + this.settings.length) % this.settings.length;
+        this.updateSelection();
+      },
+      onDown: () => {
+        this.selectedIndex = (this.selectedIndex + 1) % this.settings.length;
+        this.updateSelection();
+      },
+      onLeft: () => this.adjustSetting(-1),
+      onRight: () => this.adjustSetting(1),
+      onBack: () => this.scene.start(SCENE_KEYS.MAIN_MENU),
+    });
   }
 
   private drawBar(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, value: number): void {

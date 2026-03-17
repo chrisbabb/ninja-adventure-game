@@ -30,6 +30,11 @@ export class GameScene extends Phaser.Scene {
   private tabKey!: Phaser.Input.Keyboard.Key;
   private formToggleKey!: Phaser.Input.Keyboard.Key;
 
+  // Gamepad "just pressed" tracking for scene-level buttons
+  private padPrevStart: boolean = false;
+  private padPrevLB: boolean = false;
+  private padPrevSelect: boolean = false;
+
   // Melee attack hitbox (temporary zone)
   private meleeZone: Phaser.GameObjects.Zone | null = null;
   private meleeBody: Phaser.Physics.Arcade.Body | null = null;
@@ -236,25 +241,41 @@ export class GameScene extends Phaser.Scene {
       pickup.update(time, delta);
     }
 
-    // Pause
-    if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
+    // Gamepad state
+    const pad = this.input.gamepad?.pad1;
+    const padStart = pad?.buttons[9]?.pressed ?? false;
+    const padLB = pad?.buttons[4]?.pressed ?? false;
+    const padSelect = pad?.buttons[8]?.pressed ?? false;
+
+    // Pause (ESC or Start)
+    const pausePressed = (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) ||
+                          (padStart && !this.padPrevStart);
+    if (pausePressed) {
       this.scene.pause();
       this.scene.launch(SCENE_KEYS.PAUSE, { gameScene: this });
     }
 
-    // Fast form toggle (Q key)
-    if (this.formToggleKey && Phaser.Input.Keyboard.JustDown(this.formToggleKey)) {
+    // Fast form toggle (Q or LB)
+    const togglePressed = (this.formToggleKey && Phaser.Input.Keyboard.JustDown(this.formToggleKey)) ||
+                           (padLB && !this.padPrevLB);
+    if (togglePressed) {
       this.cycleForm();
     }
 
-    // Form menu
-    if (this.tabKey && Phaser.Input.Keyboard.JustDown(this.tabKey)) {
+    // Form menu (TAB or Select/Back)
+    const menuPressed = (this.tabKey && Phaser.Input.Keyboard.JustDown(this.tabKey)) ||
+                         (padSelect && !this.padPrevSelect);
+    if (menuPressed) {
       this.scene.pause();
       this.scene.launch(SCENE_KEYS.FORM_MENU, {
         formSystem: this.formSystem,
         player: this.player,
       });
     }
+
+    this.padPrevStart = padStart;
+    this.padPrevLB = padLB;
+    this.padPrevSelect = padSelect;
   }
 
   private setupEnemyCollisions(enemy: BaseEnemy): void {

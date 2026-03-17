@@ -42,6 +42,9 @@ const config: Phaser.Types.Core.GameConfig = {
     VictoryScene,
   ],
   backgroundColor: '#000000',
+  input: {
+    gamepad: true,
+  },
 };
 
 new Phaser.Game(config);

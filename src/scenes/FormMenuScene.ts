@@ -3,6 +3,7 @@ import { SCENE_KEYS, FormType } from '../types';
 import { GAME_WIDTH, GAME_HEIGHT, FORM_NAMES, FORM_STATS } from '../constants';
 import { FormSystem } from '../systems/FormSystem';
 import { Player } from '../entities/Player';
+import { attachGamepadMenu } from '../utils/GamepadMenu';
 
 export class FormMenuScene extends Phaser.Scene {
   private formSystem!: FormSystem;
@@ -120,6 +121,15 @@ export class FormMenuScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-TAB', () => this.close());
       this.input.keyboard.on('keydown-ESC', () => this.close());
     }
+
+    attachGamepadMenu(this, {
+      onUp: () => this.move(-3),
+      onDown: () => this.move(3),
+      onLeft: () => this.move(-1),
+      onRight: () => this.move(1),
+      onConfirm: () => this.selectForm(),
+      onBack: () => this.close(),
+    });
   }
 
   private move(offset: number): void {
