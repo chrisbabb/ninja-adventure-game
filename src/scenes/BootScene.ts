@@ -17,6 +17,7 @@ export class BootScene extends Phaser.Scene {
     this.generateTileTextures();
     this.generateProjectileTextures();
     this.generateUITextures();
+    this.generatePickupTextures();
 
     // Initialize registry defaults
     this.registry.set('musicVolume', 0.7);
@@ -225,10 +226,41 @@ export class BootScene extends Phaser.Scene {
     this.makeCircle('particle', 3, 0xffffff);
   }
 
+  private generatePickupTextures(): void {
+    // Small health pickup - green cross
+    const gHS = this.add.graphics();
+    gHS.fillStyle(0x44cc44, 1);
+    gHS.fillRect(3, 0, 4, 10);
+    gHS.fillRect(0, 3, 10, 4);
+    gHS.generateTexture('pickup_health_small', 10, 10);
+    gHS.destroy();
+
+    // Big health pickup - larger green cross with white border
+    const gHB = this.add.graphics();
+    gHB.fillStyle(0xffffff, 1);
+    gHB.fillRect(3, 0, 8, 14);
+    gHB.fillRect(0, 3, 14, 8);
+    gHB.fillStyle(0x22ee22, 1);
+    gHB.fillRect(4, 1, 6, 12);
+    gHB.fillRect(1, 4, 12, 6);
+    gHB.generateTexture('pickup_health_big', 14, 14);
+    gHB.destroy();
+
+    // Energy pickup - blue/cyan orb
+    const gE = this.add.graphics();
+    gE.fillStyle(0x4488ff, 1);
+    gE.fillCircle(5, 5, 5);
+    gE.fillStyle(0x88ccff, 0.7);
+    gE.fillCircle(4, 3, 2);
+    gE.generateTexture('pickup_energy', 10, 10);
+    gE.destroy();
+  }
+
   private generateUITextures(): void {
     // Health bar backgrounds
     this.makeRect('ui_health_bg', 100, 10, 0x333333);
     this.makeRect('ui_health_fill', 100, 10, 0x44cc44);
+    this.makeRect('ui_energy_fill', 100, 10, 0x4488ff);
     this.makeRect('ui_health_fill_boss', 200, 12, 0xcc4444);
     this.makeRect('ui_boss_health_bg', 200, 12, 0x333333);
 

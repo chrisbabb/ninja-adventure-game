@@ -11,6 +11,7 @@ import { FormSystem } from '../systems/FormSystem';
 import { DifficultySystem } from '../systems/DifficultySystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { LevelManager } from '../levels/LevelManager';
+import { Pickup, PickupType, rollEnemyDrop } from '../entities/Pickup';
 
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -32,6 +33,9 @@ export class GameScene extends Phaser.Scene {
   // Melee attack hitbox (temporary zone)
   private meleeZone: Phaser.GameObjects.Zone | null = null;
   private meleeBody: Phaser.Physics.Arcade.Body | null = null;
+
+  // Pickups
+  private pickups: Pickup[] = [];
 
   constructor() {
     super(SCENE_KEYS.GAME);
@@ -119,35 +123,7 @@ export class GameScene extends Phaser.Scene {
 
     // Set up enemy collisions
     this.levelManager.enemies.forEach(enemy => {
-      enemy.setPlayerReference(this.player);
-
-      this.physics.add.collider(enemy, this.levelManager.solidTiles);
-      this.physics.add.collider(enemy, this.levelManager.platformTiles);
-      this.physics.add.collider(enemy, this.levelManager.breakableTiles);
-
-      // Player touching enemy = take damage
-      this.physics.add.overlap(this.player, enemy, () => {
-        if (enemy.isAlive()) {
-          this.player.takeDamage(enemy.damage);
-        }
-      });
-
-      // Player projectiles vs enemy
-      this.physics.add.overlap(this.player.projectiles, enemy, (a, b) => {
-        const projectile = (a instanceof Projectile ? a : b) as Projectile;
-        const target = (a instanceof BaseEnemy ? a : b) as BaseEnemy;
-        if (target.isAlive()) {
-          target.takeDamage(projectile.damage);
-          if (!projectile.piercing) projectile.destroy();
-        }
-      });
-
-      // Enemy projectiles vs player
-      this.physics.add.overlap(enemy.projectiles, this.player, (a, b) => {
-        const projectile = (a instanceof Projectile ? a : b) as Projectile;
-        this.player.takeDamage(projectile.damage);
-        projectile.destroy();
-      });
+      this.setupEnemyCollisions(enemy);
     });
 
     // Player projectiles vs vine barriers
@@ -177,18 +153,7 @@ export class GameScene extends Phaser.Scene {
         const type = enemies[Math.floor(Math.random() * enemies.length)];
         const mult = this.difficultySystem.getMultipliers();
         const enemy = createEnemy(this, x + (Math.random() > 0.5 ? 40 : -40), y, type, mult.enemyHealth, mult.enemyDamage, mult.enemySpeed);
-        enemy.setPlayerReference(this.player);
-        this.physics.add.collider(enemy, this.levelManager.solidTiles);
-        this.physics.add.overlap(this.player, enemy, () => {
-          if (enemy.isAlive()) this.player.takeDamage(enemy.damage);
-        });
-        this.physics.add.overlap(this.player.projectiles, enemy, (a, b) => {
-          const projectile = (a instanceof Projectile ? a : b) as Projectile;
-          if (enemy.isAlive()) {
-            enemy.takeDamage(projectile.damage);
-            if (!projectile.piercing) projectile.destroy();
-          }
-        });
+        this.setupEnemyCollisions(enemy);
         this.levelManager.enemies.push(enemy);
       }
     });
@@ -256,6 +221,16 @@ export class GameScene extends Phaser.Scene {
       this.boss.update(time, delta);
     }
 
+    // Update pickups
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const pickup = this.pickups[i];
+      if (!pickup.active) {
+        this.pickups.splice(i, 1);
+        continue;
+      }
+      pickup.update(time, delta);
+    }
+
     // Pause
     if (this.escKey && Phaser.Input.Keyboard.JustDown(this.escKey)) {
       this.scene.pause();
@@ -275,6 +250,71 @@ export class GameScene extends Phaser.Scene {
         player: this.player,
       });
     }
+  }
+
+  private setupEnemyCollisions(enemy: BaseEnemy): void {
+    enemy.setPlayerReference(this.player);
+
+    this.physics.add.collider(enemy, this.levelManager.solidTiles);
+    this.physics.add.collider(enemy, this.levelManager.platformTiles);
+    this.physics.add.collider(enemy, this.levelManager.breakableTiles);
+
+    // Player touching enemy = take damage
+    this.physics.add.overlap(this.player, enemy, () => {
+      if (enemy.isAlive()) {
+        this.player.takeDamage(enemy.damage);
+      }
+    });
+
+    // Player projectiles vs enemy
+    this.physics.add.overlap(this.player.projectiles, enemy, (a, b) => {
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
+      const target = (a instanceof BaseEnemy ? a : b) as BaseEnemy;
+      if (target.isAlive()) {
+        target.takeDamage(projectile.damage);
+        if (!projectile.piercing) projectile.destroy();
+      }
+    });
+
+    // Enemy projectiles vs player
+    this.physics.add.overlap(enemy.projectiles, this.player, (a, b) => {
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
+      this.player.takeDamage(projectile.damage);
+      projectile.destroy();
+    });
+
+    // Drop pickup on death
+    enemy.onDeathCallback = (x: number, y: number) => {
+      this.spawnPickup(x, y);
+    };
+  }
+
+  private spawnPickup(x: number, y: number): void {
+    const pickup = rollEnemyDrop(this, x, y);
+    if (!pickup) return;
+
+    this.pickups.push(pickup);
+    this.physics.add.collider(pickup, this.levelManager.solidTiles);
+    this.physics.add.collider(pickup, this.levelManager.platformTiles);
+
+    this.physics.add.overlap(this.player, pickup, () => {
+      if (!pickup.active) return;
+      if (pickup.pickupType === PickupType.ENERGY) {
+        this.player.restoreEnergy(pickup.value);
+      } else {
+        this.player.heal(pickup.value);
+      }
+      // Collect effect
+      const particles = this.add.particles(pickup.x, pickup.y, 'particle', {
+        speed: { min: 30, max: 80 },
+        lifespan: 300,
+        quantity: 4,
+        scale: { start: 0.8, end: 0 },
+        tint: pickup.pickupType === PickupType.ENERGY ? 0x4488ff : 0x44cc44,
+      });
+      this.time.delayedCall(400, () => particles.destroy());
+      pickup.destroy();
+    });
   }
 
   private handleMeleeAttack(data: { x: number; y: number; width: number; height: number; damage: number; dirX: number }): void {

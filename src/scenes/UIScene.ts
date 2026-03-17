@@ -14,6 +14,11 @@ export class UIScene extends Phaser.Scene {
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthText!: Phaser.GameObjects.Text;
 
+  // Energy bar
+  private energyBarBg!: Phaser.GameObjects.Rectangle;
+  private energyBarFill!: Phaser.GameObjects.Rectangle;
+  private energyText!: Phaser.GameObjects.Text;
+
   // Form indicator
   private formText!: Phaser.GameObjects.Text;
   private formIcon!: Phaser.GameObjects.Rectangle;
@@ -49,9 +54,19 @@ export class UIScene extends Phaser.Scene {
       color: '#44cc44',
     });
 
+    // Energy bar
+    const ey = hy + 14;
+    this.energyBarBg = this.add.rectangle(hx + 50, ey + 5, 100, 8, 0x333333).setOrigin(0, 0.5);
+    this.energyBarFill = this.add.rectangle(hx + 50, ey + 5, 100, 8, 0x4488ff).setOrigin(0, 0.5);
+    this.energyText = this.add.text(hx, ey + 1, 'EP', {
+      fontFamily: 'monospace',
+      fontSize: '8px',
+      color: '#4488ff',
+    });
+
     // Form indicator
-    this.formIcon = this.add.rectangle(hx, hy + 20, 12, 12, FORM_STATS[this.formSystem.getCurrentForm()].color);
-    this.formText = this.add.text(hx + 18, hy + 16, FORM_NAMES[this.formSystem.getCurrentForm()], {
+    this.formIcon = this.add.rectangle(hx, hy + 34, 12, 12, FORM_STATS[this.formSystem.getCurrentForm()].color);
+    this.formText = this.add.text(hx + 18, hy + 30, FORM_NAMES[this.formSystem.getCurrentForm()], {
       fontFamily: 'monospace',
       fontSize: '8px',
       color: '#ffffff',
@@ -100,6 +115,12 @@ export class UIScene extends Phaser.Scene {
       }
     };
 
+    this.player.onEnergyChange = (energy: number, maxEnergy: number) => {
+      if (!this.destroyed) {
+        this.updatePlayerEnergy(energy, maxEnergy);
+      }
+    };
+
     // Form toggle event from GameScene
     gameScene.events.on('form-toggled', this.onFormToggled, this);
 
@@ -107,6 +128,7 @@ export class UIScene extends Phaser.Scene {
     this.events.on('shutdown', () => {
       this.destroyed = true;
       this.player.onHealthChange = null;
+      this.player.onEnergyChange = null;
       gameScene.events.off('boss-fight-start', this.onBossFightStart, this);
       gameScene.events.off('boss-health-change', this.onBossHealthChange, this);
       gameScene.events.off('form-toggled', this.onFormToggled, this);
@@ -114,6 +136,7 @@ export class UIScene extends Phaser.Scene {
 
     // Initial update
     this.updatePlayerHealth(this.player.health, this.player.maxHealth);
+    this.updatePlayerEnergy(this.player.energy, this.player.maxEnergy);
   }
 
   update(): void {
@@ -177,6 +200,21 @@ export class UIScene extends Phaser.Scene {
     }
 
     this.healthText.setText(`HP ${Math.ceil(health)}/${maxHealth}`);
+  }
+
+  private updatePlayerEnergy(energy: number, maxEnergy: number): void {
+    if (this.destroyed || !this.energyBarFill || !this.energyBarFill.active) return;
+
+    const percent = Math.max(0, energy / maxEnergy);
+    this.energyBarFill.setDisplaySize(100 * percent, 8);
+
+    if (percent > 0.3) {
+      this.energyBarFill.setFillStyle(0x4488ff);
+    } else {
+      this.energyBarFill.setFillStyle(0xcc4444);
+    }
+
+    this.energyText.setText(`EP ${Math.ceil(energy)}/${maxEnergy}`);
   }
 
   private updateBossHealth(health: number, maxHealth: number): void {

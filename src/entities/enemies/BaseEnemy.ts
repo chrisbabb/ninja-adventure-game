@@ -36,6 +36,7 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private diveTarget: { x: number; y: number } | null = null;
   private wasOnFloor: boolean = false;
   private edgeCooldown: number = 0;
+  onDeathCallback: ((x: number, y: number) => void) | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -394,6 +395,8 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
 
   private die(): void {
     this.state = EnemyState.DEAD;
+    this.onDeathCallback?.(this.x, this.y);
+
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0, 0);
     body.setEnable(false);

@@ -28,6 +28,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   health: number;
   maxHealth: number;
+  energy: number;
+  maxEnergy: number = 100;
   state: PlayerState = PlayerState.IDLE;
   facingRight: boolean = true;
 
@@ -73,6 +75,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // Callbacks
   onDeath: (() => void) | null = null;
   onHealthChange: ((health: number, maxHealth: number) => void) | null = null;
+  onEnergyChange: ((energy: number, maxEnergy: number) => void) | null = null;
 
   // Wall slide / wall jump
   private wallSlideDir: number = 0;
@@ -95,6 +98,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const stats = formSystem.getCurrentStats();
     this.maxHealth = stats.maxHealth;
     this.health = this.maxHealth;
+    this.energy = this.maxEnergy;
 
     this.setDepth(DEPTH.PLAYER);
     this.setDisplaySize(28, 32);
@@ -145,6 +149,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     const stats = this.formSystem.getCurrentStats();
+
+    // Passive energy regeneration (3 per second)
+    if (this.energy < this.maxEnergy) {
+      this.energy = Math.min(this.maxEnergy, this.energy + 3 * (delta / 1000));
+      this.onEnergyChange?.(this.energy, this.maxEnergy);
+    }
 
     // Ground check
     this.wasGrounded = this.isGrounded;
@@ -370,10 +380,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.projectiles.add(proj);
   }
 
+  private getSpecialCost(ability: SpecialAbility): number {
+    switch (ability) {
+      case SpecialAbility.FLAME_SWORD: return 15;
+      case SpecialAbility.BLOCK_SMASH: return 20;
+      case SpecialAbility.SHURIKEN_DASH: return 12;
+      case SpecialAbility.ARROW_SHOT: return 10;
+      case SpecialAbility.MASTER_ALL: return 25;
+      default: return 0;
+    }
+  }
+
   private performSpecial(stats: ReturnType<typeof this.formSystem.getCurrentStats>): void {
-    const form = this.formSystem.getCurrentForm();
     const dirX = this.facingRight ? 1 : -1;
     const damage = this.difficultySystem.scalePlayerDamage(stats.attackDamage);
+    const cost = this.getSpecialCost(stats.specialAbility);
+
+    if (cost > 0 && !this.useEnergy(cost)) return;
 
     switch (stats.specialAbility) {
       case SpecialAbility.FLAME_SWORD:
@@ -414,6 +437,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private performDash(): void {
+    if (!this.useEnergy(10)) return;
+
     const body = this.body as Phaser.Physics.Arcade.Body;
     const dirX = this.facingRight ? 1 : -1;
 
@@ -512,6 +537,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   heal(amount: number): void {
     this.health = Math.min(this.maxHealth, this.health + amount);
     this.onHealthChange?.(this.health, this.maxHealth);
+  }
+
+  restoreEnergy(amount: number): void {
+    this.energy = Math.min(this.maxEnergy, this.energy + amount);
+    this.onEnergyChange?.(this.energy, this.maxEnergy);
+  }
+
+  private useEnergy(cost: number): boolean {
+    if (this.energy < cost) return false;
+    this.energy -= cost;
+    this.onEnergyChange?.(this.energy, this.maxEnergy);
+    return true;
   }
 
   private die(): void {
