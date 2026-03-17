@@ -12,8 +12,8 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     // Load sprite sheets (will gracefully fall back to procedural if missing)
     this.load.spritesheet('player_idle_sheet', 'assets/player_idle.png', {
-      frameWidth: 32,
-      frameHeight: 32,
+      frameWidth: 96,
+      frameHeight: 96,
     });
   }
 
@@ -299,7 +299,7 @@ export class BootScene extends Phaser.Scene {
     if (this.textures.exists('player_idle_sheet')) {
       this.anims.create({
         key: 'player_idle',
-        frames: this.anims.generateFrameNumbers('player_idle_sheet', { start: 0, end: 5 }),
+        frames: this.anims.generateFrameNumbers('player_idle_sheet', { start: 0, end: 4 }),
         frameRate: 8,
         repeat: -1,
       });
@@ -311,10 +311,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   private generateProceduralIdleFrames(): void {
-    const frameCount = 6;
-    const w = 32, h = 32;
+    const frameCount = 5;
+    const w = 96, h = 96;
     // Subtle vertical bob offsets per frame (breathing cycle)
-    const bobOffsets = [0, -1, -1, 0, 1, 1];
+    const bobOffsets = [0, -1, -1, 0, 1];
 
     for (let f = 0; f < frameCount; f++) {
       const g = this.add.graphics();
