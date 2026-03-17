@@ -354,16 +354,6 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
-    // Visual slash effect
-    const slash = this.add.rectangle(data.x, data.y, data.width, data.height, 0xffffff, 0.5);
-    slash.setDepth(DEPTH.PARTICLES);
-    this.tweens.add({
-      targets: slash,
-      alpha: 0,
-      scaleX: 1.5,
-      duration: 150,
-      onComplete: () => slash.destroy(),
-    });
   }
 
   private handleBlockSmash(data: { x: number; y: number; width: number; height: number }): void {
