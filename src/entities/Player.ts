@@ -105,7 +105,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.energy = this.maxEnergy;
 
     this.setDepth(DEPTH.PLAYER);
-    this.setDisplaySize(56, 64);
+    this.setDisplaySize(80, 80);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     // Sprite is 96x96 with ~30px padding below the character
