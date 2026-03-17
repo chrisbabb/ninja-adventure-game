@@ -34,6 +34,8 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   projectiles: Phaser.Physics.Arcade.Group;
   private playerRef: Phaser.Physics.Arcade.Sprite | null = null;
   private diveTarget: { x: number; y: number } | null = null;
+  private wasOnFloor: boolean = false;
+  private edgeCooldown: number = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -106,6 +108,23 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       body.setVelocityY(600);
     }
 
+    // Edge detection for ground enemies: detect when walking off a platform
+    if (!this.config.flying) {
+      const onFloor = body.blocked.down;
+
+      if (this.wasOnFloor && !onFloor && body.velocity.y >= 0 && this.edgeCooldown <= 0) {
+        // Just walked off an edge - reverse direction and nudge back
+        this.patrolDir *= -1;
+        body.setVelocityX(this.patrolDir * this.config.speed * 0.6);
+        // Nudge back onto the platform
+        this.x -= this.patrolDir * -4;
+        this.edgeCooldown = 300; // prevent rapid toggling
+      }
+
+      this.wasOnFloor = onFloor;
+    }
+
+    this.edgeCooldown = Math.max(0, this.edgeCooldown - delta);
     this.stateTimer += delta;
 
     switch (this.state) {
@@ -235,7 +254,13 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     } else if (this.config.flying) {
       body.setVelocity(dir.x * this.config.speed, dir.y * this.config.speed * 0.6);
     } else {
-      // Ground chase
+      // Ground chase - respect platform edges
+      if (this.edgeCooldown > 0) {
+        // At a platform edge: stop and face player
+        body.setVelocityX(0);
+        this.facingRight = dir.x > 0;
+        return;
+      }
       body.setVelocityX(dir.x * this.config.speed);
     }
 
@@ -285,6 +310,12 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       this.state = EnemyState.PATROL;
       this.stateTimer = 0;
       this.diveTarget = null;
+      return;
+    }
+
+    // Stop charge attacks at platform edges
+    if (this.config.attackStyle === AttackStyle.CHARGE && !this.config.flying && this.edgeCooldown > 0) {
+      body.setVelocityX(0);
       return;
     }
 
