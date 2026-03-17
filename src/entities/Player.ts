@@ -608,9 +608,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private die(): void {
     this.state = PlayerState.DEAD;
     const body = this.body as Phaser.Physics.Arcade.Body;
-    body.setVelocity(0, -200);
-
-    this.setTint(0xff0000);
+    body.setVelocity(0, -150);
+    body.setAllowGravity(false);
 
     // Death particles
     const particles = this.scene.add.particles(this.x, this.y, 'particle', {
@@ -622,9 +621,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.scene.time.delayedCall(600, () => particles.destroy());
 
-    this.scene.time.delayedCall(1500, () => {
-      this.onDeath?.();
-    });
+    // Play death animation if available
+    if (this.scene.anims.exists('player_death')) {
+      this.clearTint();
+      this.play('player_death');
+      this.once('animationcomplete', () => {
+        // Hold on last frame briefly, then trigger game over
+        this.scene.time.delayedCall(500, () => {
+          this.onDeath?.();
+        });
+      });
+    } else {
+      this.setTint(0xff0000);
+      this.scene.time.delayedCall(1500, () => {
+        this.onDeath?.();
+      });
+    }
   }
 
   isAlive(): boolean {
@@ -670,6 +682,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
         }
         break;
       }
+      case PlayerState.DEAD:
+        // Death animation is started in die() - don't override it
+        break;
       default:
         // Stop animation for states without sprite sheets yet
         this.stop();

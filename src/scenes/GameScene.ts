@@ -263,6 +263,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(enemy, this.levelManager.solidTiles);
     this.physics.add.collider(enemy, this.levelManager.platformTiles);
     this.physics.add.collider(enemy, this.levelManager.breakableTiles);
+    this.physics.add.collider(enemy, this.levelManager.vineTiles);
 
     // Player touching enemy = take damage
     this.physics.add.overlap(this.player, enemy, () => {

@@ -35,6 +35,10 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 96,
     });
+    this.load.spritesheet('player_death_sheet', 'assets/player_death.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
 
     // Load enemy sprite sheets
     for (const [type, spriteData] of Object.entries(ENEMY_SPRITE_DATA)) {
@@ -383,6 +387,14 @@ export class BootScene extends Phaser.Scene {
         key: 'player_attack3',
         frames: this.anims.generateFrameNumbers('player_attack3_sheet', { start: 0, end: 4 }),
         frameRate: 14,
+        repeat: 0,
+      });
+    }
+    if (this.textures.exists('player_death_sheet')) {
+      this.anims.create({
+        key: 'player_death',
+        frames: this.anims.generateFrameNumbers('player_death_sheet', { start: 0, end: 9 }),
+        frameRate: 10,
         repeat: 0,
       });
     }
