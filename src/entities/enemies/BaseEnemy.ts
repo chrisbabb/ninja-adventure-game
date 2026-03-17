@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { EnemyConfig, BehaviorType, AttackStyle } from '../../types';
-import { DEPTH } from '../../constants';
+import { DEPTH, ENEMY_SPRITE_DATA, EnemySpriteData } from '../../constants';
 import { createEnemyProjectile, Projectile } from '../Projectile';
 
 export enum EnemyState {
@@ -36,6 +36,8 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private diveTarget: { x: number; y: number } | null = null;
   private wasOnFloor: boolean = false;
   private edgeCooldown: number = 0;
+  private spriteData: EnemySpriteData | null = null;
+  private currentAnimKey: string = '';
   onDeathCallback: ((x: number, y: number) => void) | null = null;
 
   constructor(
@@ -47,10 +49,16 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     damageMultiplier: number = 1,
     speedMultiplier: number = 1,
   ) {
-    super(scene, x, y, `enemy_${config.type}`);
+    // Use sprite sheet idle texture if available, otherwise procedural
+    const sd = ENEMY_SPRITE_DATA[config.type] || null;
+    const idleSheetKey = `enemy_${config.type}_idle_sheet`;
+    const textureKey = sd && scene.textures.exists(idleSheetKey) ? idleSheetKey : `enemy_${config.type}`;
+
+    super(scene, x, y, textureKey);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
+    this.spriteData = sd && scene.textures.exists(idleSheetKey) ? sd : null;
     this.config = { ...config };
     this.config.speed *= speedMultiplier;
     this.maxHealth = Math.round(config.health * healthMultiplier);
@@ -65,16 +73,28 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     this.setDisplaySize(config.width, config.height);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
-    const bw = config.width * 0.8;
-    const bh = config.height * 0.9;
-    body.setSize(bw, bh);
-    // Center body in the display area
-    const scaleX = this.scaleX || 1;
-    const scaleY = this.scaleY || 1;
-    body.setOffset(
-      (this.width - bw / scaleX) / 2,
-      this.height - bh / scaleY,
-    );
+
+    if (this.spriteData) {
+      // Sprite-based enemy: use configured body dimensions
+      body.setSize(this.spriteData.bodyWidth, this.spriteData.bodyHeight);
+      const scaleX = this.scaleX || 1;
+      const scaleY = this.scaleY || 1;
+      body.setOffset(
+        this.spriteData.bodyOffsetX / scaleX,
+        this.spriteData.bodyOffsetY / scaleY,
+      );
+    } else {
+      // Procedural enemy: auto-size body
+      const bw = config.width * 0.8;
+      const bh = config.height * 0.9;
+      body.setSize(bw, bh);
+      const scaleX = this.scaleX || 1;
+      const scaleY = this.scaleY || 1;
+      body.setOffset(
+        (this.width - bw / scaleX) / 2,
+        this.height - bh / scaleY,
+      );
+    }
 
     if (config.flying) {
       body.setAllowGravity(false);
@@ -87,6 +107,11 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       this.state = EnemyState.PATROL;
     }
 
+    // Start idle animation if sprite-based
+    if (this.spriteData) {
+      this.playAnim('idle');
+    }
+
     // Create projectile group for ranged enemies
     this.projectiles = scene.physics.add.group({
       classType: Projectile,
@@ -97,6 +122,16 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
 
   setPlayerReference(player: Phaser.Physics.Arcade.Sprite): void {
     this.playerRef = player;
+  }
+
+  private playAnim(key: string): void {
+    if (!this.spriteData) return;
+    const animKey = `enemy_${this.config.type}_${key}`;
+    if (this.currentAnimKey === animKey) return;
+    if (this.anims.animationManager.exists(animKey)) {
+      this.currentAnimKey = animKey;
+      this.play(animKey);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -152,6 +187,29 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
 
     // Flip sprite based on facing
     this.setFlipX(!this.facingRight);
+
+    // Play animations based on state
+    if (this.spriteData) {
+      switch (this.state) {
+        case EnemyState.IDLE:
+        case EnemyState.AMBUSH_WAIT:
+          this.playAnim('idle');
+          break;
+        case EnemyState.PATROL:
+        case EnemyState.CHASE:
+          this.playAnim('run');
+          break;
+        case EnemyState.ATTACK:
+          this.playAnim('attack');
+          break;
+        case EnemyState.HURT:
+          this.playAnim('hurt');
+          break;
+        case EnemyState.DEAD:
+          this.playAnim('death');
+          break;
+      }
+    }
   }
 
   private getDistToPlayer(): number {
@@ -271,6 +329,7 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private startAttack(): void {
     this.state = EnemyState.ATTACK;
     this.stateTimer = 0;
+    this.currentAnimKey = ''; // reset so attack anim replays
 
     const body = this.body as Phaser.Physics.Arcade.Body;
 
@@ -383,6 +442,7 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
 
     this.state = EnemyState.HURT;
     this.stateTimer = 0;
+    this.currentAnimKey = ''; // reset so hurt anim replays
 
     // Knockback
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -395,23 +455,38 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
 
   private die(): void {
     this.state = EnemyState.DEAD;
+    this.currentAnimKey = ''; // reset so death anim plays
     this.onDeathCallback?.(this.x, this.y);
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setVelocity(0, 0);
     body.setEnable(false);
 
-    // Death effect
-    this.scene.tweens.add({
-      targets: this,
-      alpha: 0,
-      scaleX: 0,
-      scaleY: 0,
-      duration: 300,
-      onComplete: () => {
-        this.destroy();
-      },
-    });
+    // Death animation for sprite-based enemies
+    const deathAnimKey = `enemy_${this.config.type}_death`;
+    if (this.spriteData && this.anims.animationManager.exists(deathAnimKey)) {
+      this.play(deathAnimKey);
+      this.once('animationcomplete', () => {
+        this.scene?.tweens.add({
+          targets: this,
+          alpha: 0,
+          duration: 200,
+          onComplete: () => this.destroy(),
+        });
+      });
+    } else {
+      // Procedural death effect
+      this.scene.tweens.add({
+        targets: this,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+        duration: 300,
+        onComplete: () => {
+          this.destroy();
+        },
+      });
+    }
 
     // Spawn particles
     const particles = this.scene.add.particles(this.x, this.y, 'particle', {

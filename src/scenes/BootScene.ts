@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { SCENE_KEYS } from '../types';
 import { EnemyType, BossType } from '../types';
-import { ENEMY_CONFIGS, BOSS_CONFIGS, FORM_STATS, GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../constants';
+import { ENEMY_CONFIGS, ENEMY_SPRITE_DATA, BOSS_CONFIGS, FORM_STATS, GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../constants';
 import { FormType } from '../types';
 
 export class BootScene extends Phaser.Scene {
@@ -35,6 +35,17 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 96,
     });
+
+    // Load enemy sprite sheets
+    for (const [type, spriteData] of Object.entries(ENEMY_SPRITE_DATA)) {
+      for (const anim of spriteData.anims) {
+        const sheetKey = `enemy_${type}_${anim.key}_sheet`;
+        this.load.spritesheet(sheetKey, `assets/enemies/${type}/${anim.file}`, {
+          frameWidth: spriteData.frameWidth,
+          frameHeight: spriteData.frameHeight,
+        });
+      }
+    }
   }
 
   create(): void {
@@ -49,6 +60,7 @@ export class BootScene extends Phaser.Scene {
 
     // Create animations (from file or procedural fallback)
     this.createPlayerAnimations();
+    this.createEnemyAnimations();
 
     // Initialize registry defaults
     this.registry.set('musicVolume', 0.7);
@@ -373,6 +385,22 @@ export class BootScene extends Phaser.Scene {
         frameRate: 14,
         repeat: 0,
       });
+    }
+  }
+
+  private createEnemyAnimations(): void {
+    for (const [type, spriteData] of Object.entries(ENEMY_SPRITE_DATA)) {
+      for (const anim of spriteData.anims) {
+        const sheetKey = `enemy_${type}_${anim.key}_sheet`;
+        if (!this.textures.exists(sheetKey)) continue;
+
+        this.anims.create({
+          key: `enemy_${type}_${anim.key}`,
+          frames: this.anims.generateFrameNumbers(sheetKey, { start: 0, end: anim.frames - 1 }),
+          frameRate: anim.frameRate,
+          repeat: anim.repeat,
+        });
+      }
     }
   }
 

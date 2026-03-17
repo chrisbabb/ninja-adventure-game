@@ -177,7 +177,7 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     type: EnemyType.KOBOLD_WARRIOR, health: 6, damage: 2, speed: 60,
     behavior: BehaviorType.PATROL, attackStyle: AttackStyle.MELEE,
     detectionRange: 120, attackRange: 30, attackCooldown: 1200,
-    color: 0x88aa44, width: 28, height: 28, flying: false,
+    color: 0x88aa44, width: 56, height: 36, flying: false,
   },
   [EnemyType.MINOTAUR]: {
     type: EnemyType.MINOTAUR, health: 14, damage: 5, speed: 50,
@@ -312,6 +312,49 @@ export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
     behavior: BehaviorType.PATROL, attackStyle: AttackStyle.MELEE,
     detectionRange: 110, attackRange: 32, attackCooldown: 1000,
     color: 0xddddbb, width: 28, height: 32, flying: false,
+  },
+};
+
+// ── Enemy Sprite Sheet Configurations ──────────────────────────────
+
+export interface EnemyAnimDef {
+  key: string;         // animation key suffix (e.g. 'idle', 'run')
+  file: string;        // file path under assets/enemies/<type>/
+  frames: number;      // total frame count
+  frameRate: number;
+  repeat: number;      // -1 = loop, 0 = play once
+}
+
+export interface EnemySpriteData {
+  frameWidth: number;
+  frameHeight: number;
+  bodyWidth: number;    // physics body width (in display coords)
+  bodyHeight: number;
+  bodyOffsetX: number;  // offset from frame left edge (in frame coords)
+  bodyOffsetY: number;  // offset from frame top edge (in frame coords)
+  anims: EnemyAnimDef[];
+}
+
+export const ENEMY_SPRITE_DATA: Partial<Record<EnemyType, EnemySpriteData>> = {
+  [EnemyType.KOBOLD_WARRIOR]: {
+    frameWidth: 148,
+    frameHeight: 96,
+    bodyWidth: 20,
+    bodyHeight: 28,
+    bodyOffsetX: 58,
+    bodyOffsetY: 40,
+    anims: [
+      { key: 'idle',          file: 'idle.png',           frames: 6,  frameRate: 8,  repeat: -1 },
+      { key: 'run',           file: 'run.png',            frames: 8,  frameRate: 12, repeat: -1 },
+      { key: 'attack',        file: 'combo_attack_1.png', frames: 5,  frameRate: 12, repeat: 0 },
+      { key: 'combo_attack_2', file: 'combo_attack_2.png', frames: 5,  frameRate: 12, repeat: 0 },
+      { key: 'combo_attack_3', file: 'combo_attack_3.png', frames: 6,  frameRate: 12, repeat: 0 },
+      { key: 'strong_attack', file: 'strong_attack.png',  frames: 12, frameRate: 14, repeat: 0 },
+      { key: 'hurt',          file: 'hurt.png',           frames: 4,  frameRate: 10, repeat: 0 },
+      { key: 'death',         file: 'death.png',          frames: 10, frameRate: 10, repeat: 0 },
+      { key: 'dash',          file: 'dash.png',           frames: 7,  frameRate: 12, repeat: 0 },
+      { key: 'jump',          file: 'jump.png',           frames: 3,  frameRate: 8,  repeat: 0 },
+    ],
   },
 };
 
