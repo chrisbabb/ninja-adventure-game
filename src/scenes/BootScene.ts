@@ -9,6 +9,14 @@ export class BootScene extends Phaser.Scene {
     super(SCENE_KEYS.BOOT);
   }
 
+  preload(): void {
+    // Load sprite sheets
+    this.load.spritesheet('player_idle', 'assets/player_idle.png', {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+  }
+
   create(): void {
     // Generate all placeholder textures procedurally
     this.generatePlayerTextures();
@@ -18,6 +26,9 @@ export class BootScene extends Phaser.Scene {
     this.generateProjectileTextures();
     this.generateUITextures();
     this.generatePickupTextures();
+
+    // Create animations
+    this.createPlayerAnimations();
 
     // Initialize registry defaults
     this.registry.set('musicVolume', 0.7);
@@ -281,5 +292,17 @@ export class BootScene extends Phaser.Scene {
       const stats = FORM_STATS[form];
       this.makeRect(`form_icon_${form}`, 24, 24, stats.color, 0x222222);
     }
+  }
+
+  private createPlayerAnimations(): void {
+    // Only create if the spritesheet loaded successfully
+    if (!this.textures.exists('player_idle')) return;
+
+    this.anims.create({
+      key: 'player_idle',
+      frames: this.anims.generateFrameNumbers('player_idle', { start: 0, end: 5 }),
+      frameRate: 8,
+      repeat: -1,
+    });
   }
 }

@@ -88,7 +88,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     formSystem: FormSystem,
     difficultySystem: DifficultySystem,
   ) {
-    super(scene, x, y, 'player');
+    // Use spritesheet if loaded, otherwise fall back to procedural texture
+    const hasIdleAnim = scene.textures.exists('player_idle');
+    super(scene, x, y, hasIdleAnim ? 'player_idle' : 'player');
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
@@ -126,6 +128,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     });
 
     this.applyFormStats();
+
+    // Start idle animation if available
+    if (scene.anims.exists('player_idle')) {
+      this.play('player_idle');
+    }
   }
 
   applyFormStats(): void {
@@ -133,7 +140,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.maxHealth = stats.maxHealth;
     if (this.health > this.maxHealth) this.health = this.maxHealth;
     this.jumpsRemaining = stats.maxJumps;
-    this.setTint(stats.color);
+    // Only tint when not playing a sprite animation (idle has real art)
+    if (this.state !== PlayerState.IDLE || !this.scene?.anims?.exists('player_idle')) {
+      this.setTint(stats.color);
+    }
     this.onHealthChange?.(this.health, this.maxHealth);
   }
 
@@ -277,6 +287,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     }
 
     // ── State Update ──
+    const prevState = this.state;
     if (this.isGrounded) {
       if (Math.abs(body.velocity.x) > 0) {
         this.state = PlayerState.RUN;
@@ -291,6 +302,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       } else {
         this.state = PlayerState.FALL;
       }
+    }
+
+    // ── Animation ──
+    if (this.state !== prevState) {
+      this.updateAnimation();
     }
 
     // Fall off bottom = death
@@ -583,5 +599,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   isFastRunning(): boolean {
     return this.fastRunning;
+  }
+
+  private updateAnimation(): void {
+    const hasAnims = this.scene.anims.exists('player_idle');
+    if (!hasAnims) return;
+
+    switch (this.state) {
+      case PlayerState.IDLE:
+        this.play('player_idle', true);
+        this.clearTint();
+        break;
+      default:
+        // Stop animation for states without sprite sheets yet
+        // Fall back to procedural tint-based visuals
+        this.stop();
+        this.setTint(this.formSystem.getCurrentStats().color);
+        break;
+    }
   }
 }
