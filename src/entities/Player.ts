@@ -114,9 +114,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const body = this.body as Phaser.Physics.Arcade.Body;
     // Character occupies x:34-58, y:29-65 in the 96x96 frame
-    // Body tightly wraps the visible pixels
-    body.setSize(25, 37);
-    body.setOffset(34, 29);
+    // Narrow body so melee sword range extends past the hitbox
+    body.setSize(16, 37);
+    body.setOffset(39, 29);
     body.setMaxVelocityY(MAX_FALL_SPEED);
     body.setCollideWorldBounds(false);
 
