@@ -44,6 +44,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private attackTimer: number = 0;
   private attackCooldown: number = 0;
   private canAttack: boolean = true;
+  private comboStep: number = 0; // 0, 1, 2 for the 3-hit combo
+  private comboWindowTimer: number = 0; // time left to chain next attack
+  private comboWindow: number = 500; // ms to input next combo hit
+  private attackAnimDuration: number = 0; // current attack anim length
+  private isAttacking: boolean = false;
 
   // Invincibility
   private invincible: boolean = false;
@@ -275,24 +280,45 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // ── Attack ──
     this.attackCooldown = Math.max(0, this.attackCooldown - delta);
 
-    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && this.attackCooldown <= 0) {
+    // Track attack animation duration
+    if (this.isAttacking) {
+      this.attackAnimDuration -= delta;
+      if (this.attackAnimDuration <= 0) {
+        this.isAttacking = false;
+        this.comboWindowTimer = this.comboWindow;
+      }
+    }
+
+    // Combo window countdown
+    if (this.comboWindowTimer > 0) {
+      this.comboWindowTimer -= delta;
+      if (this.comboWindowTimer <= 0) {
+        this.comboStep = 0; // reset combo if window expired
+      }
+    }
+
+    if (Phaser.Input.Keyboard.JustDown(this.attackKey) && !this.isAttacking) {
       this.performAttack(stats);
     }
 
     // ── Special / Dash ──
-    if (Phaser.Input.Keyboard.JustDown(this.dashKey) && this.dashCooldown <= 0) {
-      if (stats.specialAbility === SpecialAbility.SHURIKEN_DASH || stats.specialAbility === SpecialAbility.MASTER_ALL) {
-        this.performDash();
+    if (!this.isAttacking) {
+      if (Phaser.Input.Keyboard.JustDown(this.dashKey) && this.dashCooldown <= 0) {
+        if (stats.specialAbility === SpecialAbility.SHURIKEN_DASH || stats.specialAbility === SpecialAbility.MASTER_ALL) {
+          this.performDash();
+        }
       }
-    }
 
-    if (Phaser.Input.Keyboard.JustDown(this.specialKey)) {
-      this.performSpecial(stats);
+      if (Phaser.Input.Keyboard.JustDown(this.specialKey)) {
+        this.performSpecial(stats);
+      }
     }
 
     // ── State Update ──
     const prevState = this.state;
-    if (this.isGrounded) {
+    if (this.isAttacking) {
+      this.state = PlayerState.ATTACK;
+    } else if (this.isGrounded) {
       if (Math.abs(body.velocity.x) > 0) {
         this.state = PlayerState.RUN;
       } else {
@@ -347,16 +373,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const form = this.formSystem.getCurrentForm();
     const damage = this.difficultySystem.scalePlayerDamage(stats.attackDamage);
 
-    this.attackCooldown = 1000 / stats.attackSpeed;
-    this.state = PlayerState.ATTACK;
+    // Advance combo step (0 -> 1 -> 2 -> 0)
+    if (this.comboWindowTimer > 0 && this.comboStep < 3) {
+      // Continue combo
+    } else {
+      this.comboStep = 0; // reset
+    }
 
-    // Tint flash for attack feedback
-    this.setTint(0xffffff);
-    this.scene.time.delayedCall(100, () => {
-      if (this.active) {
-        this.setTint(stats.color);
-      }
-    });
+    // Animation durations: attack1=6f, attack2=5f, attack3=5f at 14fps
+    const animDurations = [6 / 14 * 1000, 5 / 14 * 1000, 5 / 14 * 1000];
+    this.attackAnimDuration = animDurations[this.comboStep];
+    this.isAttacking = true;
+    this.comboWindowTimer = 0;
+    this.state = PlayerState.ATTACK;
+    this.updateAnimation();
+
+    // Advance combo for next press
+    this.comboStep = (this.comboStep + 1) % 3;
 
     switch (form) {
       case FormType.ARCHER:
@@ -619,6 +652,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           this.clearTint();
         }
         break;
+      case PlayerState.ATTACK: {
+        // comboStep was already advanced, so current attack is comboStep - 1
+        const currentAttack = ((this.comboStep - 1) % 3 + 3) % 3;
+        const animKey = `player_attack${currentAttack + 1}`;
+        if (this.scene.anims.exists(animKey)) {
+          this.play(animKey, true);
+          this.clearTint();
+        }
+        break;
+      }
       default:
         // Stop animation for states without sprite sheets yet
         this.stop();

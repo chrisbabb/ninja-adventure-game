@@ -19,6 +19,18 @@ export class BootScene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 96,
     });
+    this.load.spritesheet('player_attack1_sheet', 'assets/player_attack1.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet('player_attack2_sheet', 'assets/player_attack2.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet('player_attack3_sheet', 'assets/player_attack3.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
   }
 
   create(): void {
@@ -320,6 +332,32 @@ export class BootScene extends Phaser.Scene {
         frames: this.anims.generateFrameNumbers('player_run_sheet', { start: 0, end: 7 }),
         frameRate: 12,
         repeat: -1,
+      });
+    }
+
+    // Attack combo animations
+    if (this.textures.exists('player_attack1_sheet')) {
+      this.anims.create({
+        key: 'player_attack1',
+        frames: this.anims.generateFrameNumbers('player_attack1_sheet', { start: 0, end: 5 }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
+    if (this.textures.exists('player_attack2_sheet')) {
+      this.anims.create({
+        key: 'player_attack2',
+        frames: this.anims.generateFrameNumbers('player_attack2_sheet', { start: 0, end: 4 }),
+        frameRate: 14,
+        repeat: 0,
+      });
+    }
+    if (this.textures.exists('player_attack3_sheet')) {
+      this.anims.create({
+        key: 'player_attack3',
+        frames: this.anims.generateFrameNumbers('player_attack3_sheet', { start: 0, end: 4 }),
+        frameRate: 14,
+        repeat: 0,
       });
     }
   }
