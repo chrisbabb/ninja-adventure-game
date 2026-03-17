@@ -10,8 +10,8 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Load sprite sheets
-    this.load.spritesheet('player_idle', 'assets/player_idle.png', {
+    // Load sprite sheets (will gracefully fall back to procedural if missing)
+    this.load.spritesheet('player_idle_sheet', 'assets/player_idle.png', {
       frameWidth: 32,
       frameHeight: 32,
     });
@@ -27,7 +27,7 @@ export class BootScene extends Phaser.Scene {
     this.generateUITextures();
     this.generatePickupTextures();
 
-    // Create animations
+    // Create animations (from file or procedural fallback)
     this.createPlayerAnimations();
 
     // Initialize registry defaults
@@ -295,12 +295,87 @@ export class BootScene extends Phaser.Scene {
   }
 
   private createPlayerAnimations(): void {
-    // Only create if the spritesheet loaded successfully
-    if (!this.textures.exists('player_idle')) return;
+    // Use loaded spritesheet if available, otherwise generate procedural frames
+    if (this.textures.exists('player_idle_sheet')) {
+      this.anims.create({
+        key: 'player_idle',
+        frames: this.anims.generateFrameNumbers('player_idle_sheet', { start: 0, end: 5 }),
+        frameRate: 8,
+        repeat: -1,
+      });
+    } else {
+      // Generate 6-frame idle animation procedurally
+      // Ninja character with purple hair, dark outfit, subtle bob
+      this.generateProceduralIdleFrames();
+    }
+  }
 
+  private generateProceduralIdleFrames(): void {
+    const frameCount = 6;
+    const w = 32, h = 32;
+    // Subtle vertical bob offsets per frame (breathing cycle)
+    const bobOffsets = [0, -1, -1, 0, 1, 1];
+
+    for (let f = 0; f < frameCount; f++) {
+      const g = this.add.graphics();
+      const bob = bobOffsets[f];
+
+      // -- Hair (purple, spiky) --
+      g.fillStyle(0x6633aa, 1);
+      g.fillRect(10, 2 + bob, 14, 7);   // hair base
+      g.fillRect(8, 4 + bob, 3, 4);     // left spike
+      g.fillRect(21, 1 + bob, 4, 5);    // right spike up
+      g.fillRect(18, 0 + bob, 3, 4);    // top spike
+      g.fillStyle(0x8844cc, 1);
+      g.fillRect(12, 3 + bob, 10, 4);   // hair highlight
+
+      // -- Face --
+      g.fillStyle(0xffccaa, 1);
+      g.fillRect(11, 7 + bob, 10, 7);   // face
+      // Eyes
+      g.fillStyle(0x220022, 1);
+      g.fillRect(13, 9 + bob, 2, 2);    // left eye
+      g.fillRect(18, 9 + bob, 2, 2);    // right eye
+
+      // -- Body (dark outfit) --
+      g.fillStyle(0x222244, 1);
+      g.fillRect(10, 14 + bob, 12, 8);  // torso
+      g.fillStyle(0x333366, 1);
+      g.fillRect(11, 15 + bob, 10, 6);  // torso detail
+
+      // -- Belt/sash accent --
+      g.fillStyle(0xcc6633, 1);
+      g.fillRect(10, 19 + bob, 12, 2);  // orange belt
+
+      // -- Arms --
+      g.fillStyle(0x222244, 1);
+      g.fillRect(7, 15 + bob, 3, 6);    // left arm
+      g.fillRect(22, 15 + bob, 3, 6);   // right arm
+      // Hands
+      g.fillStyle(0xffccaa, 1);
+      g.fillRect(7, 20 + bob, 3, 2);    // left hand
+      g.fillRect(22, 20 + bob, 3, 2);   // right hand
+
+      // -- Legs --
+      g.fillStyle(0x222244, 1);
+      g.fillRect(11, 22 + bob, 4, 6);   // left leg
+      g.fillRect(17, 22 + bob, 4, 6);   // right leg
+      // Boots
+      g.fillStyle(0x333355, 1);
+      g.fillRect(10, 27 + bob, 5, 3);   // left boot
+      g.fillRect(17, 27 + bob, 5, 3);   // right boot
+
+      g.generateTexture(`player_idle_f${f}`, w, h);
+      g.destroy();
+    }
+
+    // Create animation from individual frame textures
     this.anims.create({
       key: 'player_idle',
-      frames: this.anims.generateFrameNumbers('player_idle', { start: 0, end: 5 }),
+      frames: Array.from({ length: frameCount }, (_, i) => ({
+        key: `player_idle_f${i}`,
+        frame: 0,
+      })),
       frameRate: 8,
       repeat: -1,
     });

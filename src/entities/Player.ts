@@ -88,9 +88,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     formSystem: FormSystem,
     difficultySystem: DifficultySystem,
   ) {
-    // Use spritesheet if loaded, otherwise fall back to procedural texture
-    const hasIdleAnim = scene.textures.exists('player_idle');
-    super(scene, x, y, hasIdleAnim ? 'player_idle' : 'player');
+    // Use first idle frame if available, otherwise fall back to procedural texture
+    const hasIdleSheet = scene.textures.exists('player_idle_sheet');
+    const hasIdleProc = scene.textures.exists('player_idle_f0');
+    const initialTexture = hasIdleSheet ? 'player_idle_sheet' : hasIdleProc ? 'player_idle_f0' : 'player';
+    super(scene, x, y, initialTexture);
     scene.add.existing(this);
     scene.physics.add.existing(this);
 
