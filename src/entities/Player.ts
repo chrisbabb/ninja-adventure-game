@@ -149,8 +149,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.maxHealth = stats.maxHealth;
     if (this.health > this.maxHealth) this.health = this.maxHealth;
     this.jumpsRemaining = stats.maxJumps;
-    // Only tint when not playing a sprite animation (idle has real art)
-    if (this.state !== PlayerState.IDLE || !this.scene?.anims?.exists('player_idle')) {
+    // Only tint when not playing a sprite animation
+    const hasAnim = this.state === PlayerState.IDLE || this.state === PlayerState.RUN || this.state === PlayerState.ATTACK;
+    if (!hasAnim) {
       this.setTint(stats.color);
     }
     this.onHealthChange?.(this.health, this.maxHealth);
