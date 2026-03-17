@@ -174,9 +174,9 @@ export const FORM_NAMES: Record<FormType, string> = {
 
 export const ENEMY_CONFIGS: Record<EnemyType, EnemyConfig> = {
   [EnemyType.KOBOLD_WARRIOR]: {
-    type: EnemyType.KOBOLD_WARRIOR, health: 6, damage: 2, speed: 60,
-    behavior: BehaviorType.PATROL, attackStyle: AttackStyle.MELEE,
-    detectionRange: 120, attackRange: 30, attackCooldown: 1200,
+    type: EnemyType.KOBOLD_WARRIOR, health: 6, damage: 2, speed: 75,
+    behavior: BehaviorType.CHASE, attackStyle: AttackStyle.MELEE,
+    detectionRange: 150, attackRange: 45, attackCooldown: 800,
     color: 0x88aa44, width: 56, height: 36, flying: false,
   },
   [EnemyType.MINOTAUR]: {
@@ -328,10 +328,11 @@ export interface EnemyAnimDef {
 export interface EnemySpriteData {
   frameWidth: number;
   frameHeight: number;
-  bodyWidth: number;    // physics body width (in display coords)
+  // Physics body in source frame coordinates (before scaling)
+  bodyWidth: number;
   bodyHeight: number;
-  bodyOffsetX: number;  // offset from frame left edge (in frame coords)
-  bodyOffsetY: number;  // offset from frame top edge (in frame coords)
+  bodyOffsetX: number;
+  bodyOffsetY: number;
   anims: EnemyAnimDef[];
 }
 
@@ -339,10 +340,11 @@ export const ENEMY_SPRITE_DATA: Partial<Record<EnemyType, EnemySpriteData>> = {
   [EnemyType.KOBOLD_WARRIOR]: {
     frameWidth: 148,
     frameHeight: 96,
-    bodyWidth: 20,
-    bodyHeight: 28,
-    bodyOffsetX: 58,
-    bodyOffsetY: 40,
+    // Kobold body occupies roughly center of frame
+    bodyWidth: 40,
+    bodyHeight: 48,
+    bodyOffsetX: 54,
+    bodyOffsetY: 36,
     anims: [
       { key: 'idle',          file: 'idle.png',           frames: 6,  frameRate: 8,  repeat: -1 },
       { key: 'run',           file: 'run.png',            frames: 8,  frameRate: 12, repeat: -1 },

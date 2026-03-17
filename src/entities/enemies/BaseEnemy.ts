@@ -11,6 +11,7 @@ export enum EnemyState {
   HURT = 'hurt',
   DEAD = 'dead',
   AMBUSH_WAIT = 'ambush_wait',
+  RETREAT = 'retreat',
 }
 
 export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
@@ -24,7 +25,6 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private patrolTimer: number = 0;
   private patrolDuration: number = 2000;
   private attackTimer: number = 0;
-  private hurtTimer: number = 0;
   private stateTimer: number = 0;
   private activated: boolean = false;
   private initialX: number;
@@ -38,6 +38,9 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private edgeCooldown: number = 0;
   private spriteData: EnemySpriteData | null = null;
   private currentAnimKey: string = '';
+  private comboCount: number = 0;
+  private retreatTimer: number = 0;
+  private hasDealtAttackDamage: boolean = false;
   onDeathCallback: ((x: number, y: number) => void) | null = null;
 
   constructor(
@@ -75,14 +78,9 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     if (this.spriteData) {
-      // Sprite-based enemy: use configured body dimensions
+      // Sprite-based enemy: body size & offset in source frame coordinates
       body.setSize(this.spriteData.bodyWidth, this.spriteData.bodyHeight);
-      const scaleX = this.scaleX || 1;
-      const scaleY = this.scaleY || 1;
-      body.setOffset(
-        this.spriteData.bodyOffsetX / scaleX,
-        this.spriteData.bodyOffsetY / scaleY,
-      );
+      body.setOffset(this.spriteData.bodyOffsetX, this.spriteData.bodyOffsetY);
     } else {
       // Procedural enemy: auto-size body
       const bw = config.width * 0.8;
@@ -144,17 +142,15 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       body.setVelocityY(600);
     }
 
-    // Edge detection for ground enemies: detect when walking off a platform
+    // Edge detection for ground enemies
     if (!this.config.flying) {
       const onFloor = body.blocked.down;
 
       if (this.wasOnFloor && !onFloor && body.velocity.y >= 0 && this.edgeCooldown <= 0) {
-        // Just walked off an edge - reverse direction and nudge back
         this.patrolDir *= -1;
         body.setVelocityX(this.patrolDir * this.config.speed * 0.6);
-        // Nudge back onto the platform
         this.x -= this.patrolDir * -4;
-        this.edgeCooldown = 300; // prevent rapid toggling
+        this.edgeCooldown = 300;
       }
 
       this.wasOnFloor = onFloor;
@@ -179,6 +175,9 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       case EnemyState.HURT:
         this.updateHurt(delta);
         break;
+      case EnemyState.RETREAT:
+        this.updateRetreat(delta);
+        break;
       case EnemyState.DEAD:
         break;
     }
@@ -197,10 +196,11 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
           break;
         case EnemyState.PATROL:
         case EnemyState.CHASE:
+        case EnemyState.RETREAT:
           this.playAnim('run');
           break;
         case EnemyState.ATTACK:
-          this.playAnim('attack');
+          // attack anim is set in startAttack
           break;
         case EnemyState.HURT:
           this.playAnim('hurt');
@@ -215,6 +215,11 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private getDistToPlayer(): number {
     if (!this.playerRef) return Infinity;
     return Phaser.Math.Distance.Between(this.x, this.y, this.playerRef.x, this.playerRef.y);
+  }
+
+  private getHorizDistToPlayer(): number {
+    if (!this.playerRef) return Infinity;
+    return Math.abs(this.x - this.playerRef.x);
   }
 
   private getDirToPlayer(): { x: number; y: number } {
@@ -258,22 +263,18 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     this.patrolTimer += delta;
 
     if (this.config.flying || this.config.behavior === BehaviorType.FLY_PATROL) {
-      // Flying patrol: horizontal movement + sine wave vertical
       this.flyOscillation += delta * 0.003;
       const flyY = this.flyBaseY + Math.sin(this.flyOscillation) * 30;
       body.setVelocityX(this.patrolDir * this.config.speed * 0.6);
       body.setVelocityY((flyY - this.y) * 2);
     } else if (this.config.behavior === BehaviorType.STATIONARY) {
       body.setVelocityX(0);
-      // Face player if in range
       if (this.playerRef && dist < this.config.detectionRange) {
         this.facingRight = this.playerRef.x > this.x;
       }
     } else {
-      // Ground patrol
       body.setVelocityX(this.patrolDir * this.config.speed * 0.6);
 
-      // Check for edges (don't walk off platforms)
       if (body.blocked.left || body.touching.left) {
         this.patrolDir = 1;
       } else if (body.blocked.right || body.touching.right) {
@@ -293,6 +294,7 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private updateChase(delta: number): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const dist = this.getDistToPlayer();
+    const horizDist = this.getHorizDistToPlayer();
     const dir = this.getDirToPlayer();
 
     if (!this.playerRef || !this.playerRef.active || dist > this.config.detectionRange * 2) {
@@ -301,34 +303,45 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    // Attack if in range
-    if (dist < this.config.attackRange && this.attackTimer <= 0) {
+    // Face the player
+    this.facingRight = dir.x > 0;
+
+    // Attack if in range and cooldown ready
+    if (horizDist < this.config.attackRange && this.attackTimer <= 0) {
       this.startAttack();
       return;
     }
 
     if (this.config.behavior === BehaviorType.FLOAT_CHASE) {
-      // Slow float toward player (poison skull etc.)
       body.setVelocity(dir.x * this.config.speed, dir.y * this.config.speed);
     } else if (this.config.flying) {
       body.setVelocity(dir.x * this.config.speed, dir.y * this.config.speed * 0.6);
     } else {
-      // Ground chase - respect platform edges
+      // Ground chase
       if (this.edgeCooldown > 0) {
-        // At a platform edge: stop and face player
         body.setVelocityX(0);
-        this.facingRight = dir.x > 0;
         return;
       }
-      body.setVelocityX(dir.x * this.config.speed);
-    }
 
-    this.facingRight = dir.x > 0;
+      // Run toward the player at full speed
+      body.setVelocityX(dir.x * this.config.speed);
+
+      // Jump if player is above and enemy is on the ground
+      if (this.playerRef && this.playerRef.y < this.y - 30 && body.blocked.down) {
+        body.setVelocityY(-280);
+      }
+
+      // Jump over obstacles (wall ahead)
+      if ((body.blocked.left || body.blocked.right) && body.blocked.down) {
+        body.setVelocityY(-250);
+      }
+    }
   }
 
   private startAttack(): void {
     this.state = EnemyState.ATTACK;
     this.stateTimer = 0;
+    this.hasDealtAttackDamage = false;
     this.currentAnimKey = ''; // reset so attack anim replays
 
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -347,11 +360,27 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
         this.performExplode();
         break;
       case AttackStyle.MELEE:
-      default:
-        // Melee: lunge forward briefly
+      default: {
+        // Pick combo animation if sprite-based
+        if (this.spriteData) {
+          const comboAnims = ['attack', 'combo_attack_2', 'combo_attack_3'];
+          const animKey = comboAnims[this.comboCount % comboAnims.length];
+          // Only use combos that have animations loaded
+          const fullKey = `enemy_${this.config.type}_${animKey}`;
+          if (this.anims.animationManager.exists(fullKey)) {
+            this.currentAnimKey = fullKey;
+            this.play(fullKey);
+          } else {
+            this.playAnim('attack');
+          }
+          this.comboCount++;
+        }
+
+        // Lunge toward the player
         const dir = this.getDirToPlayer();
-        body.setVelocityX(dir.x * this.config.speed * 1.5);
+        body.setVelocityX(dir.x * this.config.speed * 1.8);
         break;
+      }
     }
 
     this.attackTimer = this.config.attackCooldown;
@@ -360,16 +389,34 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   private updateAttack(time: number, delta: number): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
 
-    // Attack animation duration
     const attackDuration = this.config.attackStyle === AttackStyle.CHARGE ? 600 :
-                          this.config.attackStyle === AttackStyle.DIVE ? 800 : 400;
+                          this.config.attackStyle === AttackStyle.DIVE ? 800 : 500;
+
+    // Emit melee hitbox partway through the attack animation
+    if (this.config.attackStyle === AttackStyle.MELEE && !this.hasDealtAttackDamage &&
+        this.stateTimer > attackDuration * 0.35) {
+      this.hasDealtAttackDamage = true;
+      this.emitMeleeHitbox();
+    }
 
     if (this.stateTimer > attackDuration) {
       body.setVelocityX(0);
       if (this.config.flying) body.setVelocityY(0);
-      this.state = EnemyState.PATROL;
-      this.stateTimer = 0;
       this.diveTarget = null;
+
+      // After melee attack, briefly retreat before chasing again
+      if (this.config.attackStyle === AttackStyle.MELEE && this.spriteData) {
+        this.state = EnemyState.RETREAT;
+        this.stateTimer = 0;
+        this.retreatTimer = 300 + Math.random() * 200;
+        // Reset combo after 3 hits or randomly
+        if (this.comboCount >= 3 || Math.random() < 0.3) {
+          this.comboCount = 0;
+        }
+      } else {
+        this.state = EnemyState.CHASE;
+        this.stateTimer = 0;
+      }
       return;
     }
 
@@ -383,6 +430,53 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
     if (this.config.attackStyle === AttackStyle.DIVE && this.diveTarget) {
       const dir = Phaser.Math.Angle.Between(this.x, this.y, this.diveTarget.x, this.diveTarget.y);
       body.setVelocity(Math.cos(dir) * this.config.speed * 2, Math.sin(dir) * this.config.speed * 2);
+    }
+  }
+
+  private emitMeleeHitbox(): void {
+    if (!this.playerRef) return;
+
+    const dirX = this.facingRight ? 1 : -1;
+    const range = this.config.attackRange;
+    const hitX = this.x + dirX * (range / 2 + 8);
+    const hitY = this.y;
+    const hitW = range;
+    const hitH = 30;
+
+    const attackRect = new Phaser.Geom.Rectangle(
+      hitX - hitW / 2, hitY - hitH / 2, hitW, hitH,
+    );
+    const playerBounds = this.playerRef.getBounds();
+
+    if (Phaser.Geom.Rectangle.Overlaps(attackRect, playerBounds)) {
+      // Access takeDamage through the player reference - emit event instead
+      this.scene.events.emit('enemy-melee-attack', {
+        x: hitX,
+        y: hitY,
+        width: hitW,
+        height: hitH,
+        damage: this.damage,
+      });
+    }
+  }
+
+  private updateRetreat(delta: number): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const dir = this.getDirToPlayer();
+
+    // Back away from the player briefly
+    this.facingRight = dir.x > 0;
+
+    if (this.edgeCooldown <= 0) {
+      body.setVelocityX(-dir.x * this.config.speed * 0.6);
+    } else {
+      body.setVelocityX(0);
+    }
+
+    if (this.stateTimer > this.retreatTimer) {
+      body.setVelocityX(0);
+      this.state = EnemyState.CHASE;
+      this.stateTimer = 0;
     }
   }
 
@@ -413,18 +507,17 @@ export class BaseEnemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   private performExplode(): void {
-    // Poison skull style: explode on contact (handled by collision)
-    // Visual flash effect
     this.setTint(0xffffff);
     this.scene.time.delayedCall(200, () => {
-      this.takeDamage(999); // self-destruct
+      this.takeDamage(999);
     });
   }
 
   private updateHurt(delta: number): void {
     if (this.stateTimer > 300) {
       this.clearTint();
-      this.state = EnemyState.PATROL;
+      // After hurt, immediately chase the player
+      this.state = EnemyState.CHASE;
       this.stateTimer = 0;
     }
   }

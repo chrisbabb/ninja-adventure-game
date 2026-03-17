@@ -140,6 +140,11 @@ export class GameScene extends Phaser.Scene {
       this.handleMeleeAttack(data);
     });
 
+    // ── Enemy melee attack event ──
+    this.events.on('enemy-melee-attack', (data: { x: number; y: number; width: number; height: number; damage: number }) => {
+      this.player.takeDamage(data.damage);
+    });
+
     // ── Block smash event ──
     this.events.on('player-block-smash', (data: { x: number; y: number; width: number; height: number }) => {
       this.handleBlockSmash(data);
